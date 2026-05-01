@@ -324,13 +324,12 @@
       </select>
     </div>
     <div class="form-group">
-      <label>個別休日（祝日以外の会社独自の休日）を追加</label>
-      <div class="form-inline" style="margin-bottom:6px">
-        <input type="date" id="newHolidayDate" style="max-width:150px">
-        <input type="text" id="newHolidayName" placeholder="名称（例: 夏季休暇）" style="max-width:180px">
-        <button class="btn-small no-print" onclick="addIndividualHoliday()">追加</button>
+      <label>追加休日日数（週休・祝日以外の休日）</label>
+      <div class="form-inline">
+        <input type="number" id="additionalHolidays" value="0" min="0" max="200" style="max-width:90px" oninput="recalcAll(); saveAll()">
+        <span style="margin-left:4px">日</span>
       </div>
-      <ul id="individualHolidayList" class="holiday-list"></ul>
+      <div style="font-size:11px;color:#718096;margin-top:4px">夏季休暇・年末年始・隔週休暇など、週休・祝日以外で年間に付与する休日の合計日数を入力してください</div>
     </div>
     <div class="check-item">
       <div class="check-header">
@@ -646,9 +645,14 @@
 
     <div id="wageMonthly">
       <div class="form-group">
-        <label>月給（所定内賃金）（円）</label>
+        <label>月給（所定内賃金・合計）（円）</label>
         <input type="number" id="monthlySalary" placeholder="例: 200000" min="0" style="max-width:150px" oninput="recalcAll(); saveAll()">
-        <div style="font-size:11px;color:#718096;margin-top:3px">基本給＋固定手当の合計（通勤手当・時間外手当は除く）</div>
+        <div style="font-size:11px;color:#718096;margin-top:3px">基本給＋固定手当の合計（通勤手当・時間外割増賃金・精勤手当等は除く）</div>
+      </div>
+      <div class="form-group">
+        <label>うち固定残業代（月額・任意）（円）</label>
+        <input type="number" id="fixedOT" placeholder="例: 20000" min="0" style="max-width:150px" oninput="recalcAll(); saveAll()">
+        <div style="font-size:11px;color:#718096;margin-top:3px">月給に固定残業手当が含まれる場合に入力（入力すると基本給単独でも最低賃金を検証します）</div>
       </div>
     </div>
     <div id="wageDaily" style="display:none">
@@ -667,12 +671,22 @@
     <div class="check-item">
       <div class="check-header">
         <div>
-          <div class="check-label">8-1：最低賃金との比較</div>
-          <div class="check-sub">最低賃金法 第4条 ／ 時間換算額 ≥ 最低賃金額</div>
+          <div class="check-label">8-1：基本給のみの最低賃金比較（年間ベース）</div>
+          <div class="check-sub">最低賃金法 第4条 ／ 年額基本給 ÷ 年間総労働時間 ≥ 最低賃金額</div>
         </div>
         <span class="judgment" id="j8-1">－</span>
       </div>
       <div class="process-box" id="proc8-1">（計算待ち）</div>
+    </div>
+    <div class="check-item" id="check8-2" style="display:none">
+      <div class="check-header">
+        <div>
+          <div class="check-label">8-2：総額（固定残業代込み）の最低賃金比較（年間ベース）</div>
+          <div class="check-sub">最低賃金法 第4条 ／ 年額総賃金 ÷ 年間総労働時間 ≥ 最低賃金額</div>
+        </div>
+        <span class="judgment" id="j8-2">－</span>
+      </div>
+      <div class="process-box" id="proc8-2">（計算待ち）</div>
     </div>
   </div>
 
@@ -714,8 +728,6 @@ const HOLIDAYS_BY_YEAR = {
          '2027-07-19','2027-08-11','2027-08-12','2027-09-20','2027-09-23','2027-10-11',
          '2027-11-03','2027-11-23','2027-11-24']
 };
-
-let individualHolidays = []; // [{date:'YYYY-MM-DD', name:'...'}]
 
 // ────────────────────────────────────────────────
 // Time utilities
@@ -763,19 +775,14 @@ function countPubHolOnWorkDays(year) {
   const offJs = getOffJsDays();
   return list.filter(d => !offJs.includes(new Date(d + 'T00:00:00').getDay())).length;
 }
-function countIndivHolOnWorkDays(year) {
-  if (!individualHolidays.length) return 0;
-  const offJs = getOffJsDays();
-  return individualHolidays.filter(h =>
-    h.date && h.date.startsWith(String(year)) &&
-    !offJs.includes(new Date(h.date + 'T00:00:00').getDay())
-  ).length;
+function getAdditionalHolidays() {
+  return parseInt(document.getElementById('additionalHolidays').value) || 0;
 }
 function getAnnualWorkDays(year) {
-  return Math.max(0, getWeeklyWorkDays() * 52 - countPubHolOnWorkDays(year) - countIndivHolOnWorkDays(year));
+  return Math.max(0, getWeeklyWorkDays() * 52 - countPubHolOnWorkDays(year) - getAdditionalHolidays());
 }
 function getAnnualOffDays(year) {
-  return getWeeklyOffDays() * 52 + countPubHolOnWorkDays(year) + countIndivHolOnWorkDays(year);
+  return getWeeklyOffDays() * 52 + countPubHolOnWorkDays(year) + getAdditionalHolidays();
 }
 function isSpecial() { return document.getElementById('specialMeasure').checked; }
 function weeklyLimit() { return isSpecial() ? 44 : 40; }
@@ -806,7 +813,7 @@ function calcS1() {
   const year = new Date().getFullYear();
   const awd = getAnnualWorkDays(year);
   const pubHol = countPubHolOnWorkDays(year);
-  const indHol = countIndivHolOnWorkDays(year);
+  const addHol = getAdditionalHolidays();
   const dnames = ['月','火','水','木','金','土','日'];
   const offIdx = [];
   for (let i = 0; i < 7; i++) if (document.getElementById('wd'+i).checked) offIdx.push(i);
@@ -836,7 +843,7 @@ function calcS1() {
     (pubHol > 0
       ? '  − 祝日（就業日に当たる分）: ' + pubHol + '日  ← 祝日は' + holLabel + '\n'
       : '  祝日: ' + holLabel + 'のため週休のみで計算\n') +
-    (indHol > 0 ? '  − 個別休日（就業日に当たる分）: ' + indHol + '日\n' : '') +
+    (addHol > 0 ? '  − 追加休日: ' + addHol + '日\n' : '') +
     '= 推定年間就業日数: ' + awd + '日\n' +
     '年間総労働時間（推定）: ' + awd + '日 × ' + minToH(dm) + '時間 = ' + (dm * awd / 60).toFixed(1) + '時間');
 
@@ -922,7 +929,7 @@ function calcS4() {
   const year = new Date().getFullYear();
   const annOff = getAnnualOffDays(year);
   const pubHol = countPubHolOnWorkDays(year);
-  const indHol = countIndivHolOnWorkDays(year);
+  const addHol = getAdditionalHolidays();
   const holType = document.getElementById('holidayType').value;
   const dnames = ['月','火','水','木','金','土','日'];
   const offIdx = [];
@@ -942,7 +949,7 @@ function calcS4() {
     '週休: ' + offDays + '日/週 × 52週 = ' + (offDays*52) + '日\n' +
     (holType==='off' && pubHol>0 ? '祝日（就業日に当たる分）: ' + pubHol + '日\n' :
       holType==='work' ? '祝日: 出勤日扱い（加算なし）\n' : '') +
-    (indHol>0 ? '個別休日（就業日に当たる分）: ' + indHol + '日\n' : '') +
+    (addHol>0 ? '追加休日: ' + addHol + '日\n' : '') +
     '= 年間休日合計（推定）: ' + annOff + '日\n' +
     '参考基準: 105日以上が一般的目安\n' +
     '判  定: ' + (j42==='ok' ? '○ 105日以上' : j42==='warn' ? '△ 105日未満（内容確認推奨）' : '✗ 法定週休分が不足'));
@@ -1101,11 +1108,12 @@ const ITEM_LABELS = {
   '4-2':'④-2 年間休日日数',       '4-3':'④-3 休日労働割増賃金',
   '5-1':'⑤-1 書類整備',           '5-2':'⑤-2 1日・週の上限時間',
   '7-1':'⑦-1 時間外・深夜割増率', '7-2':'⑦-2 休日労働割増率',
-  '7-3':'⑦-3 月60時間超割増率',   '8-1':'⑧-1 最低賃金との比較'
+  '7-3':'⑦-3 月60時間超割増率',
+  '8-1':'⑧-1 基本給のみの最低賃金比較', '8-2':'⑧-2 総額（固定残業代込み）の最低賃金比較'
 };
 const SECTION_KEYS = [
   ['1-1','1-2'],['2-1','2-2','2-3'],['3-1','3-2'],
-  ['4-1','4-2','4-3'],['5-1','5-2','5-3'],['6-1','6-2'],['7-1','7-2','7-3'],['8-1']
+  ['4-1','4-2','4-3'],['5-1','5-2','5-3'],['6-1','6-2'],['7-1','7-2','7-3'],['8-1','8-2']
 ];
 
 function updateOverall(results) {
@@ -1192,11 +1200,12 @@ function onPrefectureChange() {
 function calcS8() {
   const minWage = parseFloat(document.getElementById('minWage').value) || 0;
   const wageType = document.getElementById('wageType').value;
-  const dm = getDailyMin();       // daily working minutes
-  const dailyH = dm / 60;        // daily hours (decimal)
-  const wdays = getWeeklyWorkDays();
-  const monthlyH = dailyH * wdays * 52 / 12; // monthly working hours
+  const dm = getDailyMin();
+  const dailyH = dm / 60;
   const pref = document.getElementById('prefecture').value || '（未選択）';
+
+  // hide check 8-2 by default; shown only when fixedOT is entered for monthly wages
+  document.getElementById('check8-2').style.display = 'none';
 
   if (minWage <= 0) {
     setJ('j8-1', 'warn');
@@ -1204,26 +1213,85 @@ function calcS8() {
     return { '8-1': 'warn' };
   }
 
-  let hourlyRate = 0, inputLabel = '', calcDetail = '';
-
   if (wageType === 'monthly') {
     const monthly = parseFloat(document.getElementById('monthlySalary').value) || 0;
+    const fixedOT = parseFloat(document.getElementById('fixedOT').value) || 0;
     if (monthly <= 0) {
       setJ('j8-1', 'warn');
       setP('proc8-1', '月給が入力されていません。\n判定: △');
       return { '8-1': 'warn' };
     }
-    hourlyRate = monthly / monthlyH;
-    inputLabel = '月給: ' + monthly.toLocaleString() + '円';
-    calcDetail =
-      '【月の所定労働時間の計算】\n' +
-      '  1日の所定労働時間: ' + dailyH.toFixed(2) + '時間\n' +
-      '  週の就業日数:      ' + wdays + '日\n' +
-      '  計算式: ' + dailyH.toFixed(2) + '時間 × ' + wdays + '日 × 52週 ÷ 12ヶ月\n' +
-      '         = ' + monthlyH.toFixed(2) + '時間/月\n\n' +
-      '【時間換算額の計算】\n' +
-      '  ' + monthly.toLocaleString() + '円 ÷ ' + monthlyH.toFixed(2) + '時間\n' +
-      '  = ' + hourlyRate.toFixed(2) + '円/時間';
+    if (dailyH <= 0) {
+      setJ('j8-1', 'warn');
+      setP('proc8-1', '① 労働時間タブで始業・終業・休憩を先に設定してください。\n判定: △');
+      return { '8-1': 'warn' };
+    }
+
+    const year = new Date().getFullYear();
+    const annOff = getAnnualOffDays(year);
+    const annWorkDays = 365 - annOff;
+    const annWorkH = dailyH * annWorkDays;
+
+    const weeklyOff = getWeeklyOffDays();
+    const pubHol = countPubHolOnWorkDays(year);
+    const addHol = getAdditionalHolidays();
+    const holBreakdown = '週休: ' + weeklyOff + '日 × 52週 = ' + (weeklyOff*52) + '日' +
+      (pubHol > 0 ? '\n祝日（就業日に当たる分）: ' + pubHol + '日' : '') +
+      (addHol > 0 ? '\n追加休日: ' + addHol + '日' : '');
+
+    const annualBaseText =
+      '【年間労働時間の計算（④ 休日設定を使用）】\n' +
+      holBreakdown + '\n' +
+      '= 年間休日合計: ' + annOff + '日\n' +
+      '年間就労日数: 365 − ' + annOff + ' = ' + annWorkDays + '日\n' +
+      '年間総労働時間: ' + dailyH.toFixed(2) + '時間 × ' + annWorkDays + '日 = ' + annWorkH.toFixed(1) + '時間\n';
+
+    // 8-1: basic salary only (excluding fixed OT)
+    const basicMonthly = monthly - fixedOT;
+    const annualBasic = basicMonthly * 12;
+    const rateBasic = annWorkH > 0 ? annualBasic / annWorkH : 0;
+    const diffBasic = rateBasic - minWage;
+    const j81 = rateBasic >= minWage ? 'ok' : 'ng';
+    setJ('j8-1', j81);
+
+    let proc81 = '適用最低賃金: ' + pref + ' ' + minWage.toLocaleString() + '円/時間\n\n' +
+      annualBaseText + '\n' +
+      '【基本給のみの検証（固定残業代 ' + fixedOT.toLocaleString() + '円/月 を除く）】\n' +
+      '月額基本給: ' + monthly.toLocaleString() + '円';
+    if (fixedOT > 0) {
+      proc81 += ' − 固定残業代 ' + fixedOT.toLocaleString() + '円 = ' + basicMonthly.toLocaleString() + '円';
+    }
+    proc81 +=
+      '\n年額基本給: ' + basicMonthly.toLocaleString() + '円 × 12ヶ月 = ' + annualBasic.toLocaleString() + '円\n' +
+      '時間換算額: ' + annualBasic.toLocaleString() + '円 ÷ ' + annWorkH.toFixed(1) + '時間 = ' + rateBasic.toFixed(2) + '円/時間\n' +
+      '最低賃金:   ' + minWage.toLocaleString() + '円/時間\n' +
+      '差額:       ' + (diffBasic >= 0 ? '+' : '') + diffBasic.toFixed(2) + '円/時間\n' +
+      '判  定: ' + (j81==='ok' ? '○ 最低賃金以上' : '✗ 最低賃金未満（' + Math.abs(diffBasic).toFixed(2) + '円/時間 不足）');
+    setP('proc8-1', proc81);
+
+    const result = { '8-1': j81 };
+
+    // 8-2: total (basic + fixed OT) — shown only when fixedOT > 0
+    if (fixedOT > 0) {
+      document.getElementById('check8-2').style.display = 'block';
+      const annualTotal = monthly * 12;
+      const rateTotal = annWorkH > 0 ? annualTotal / annWorkH : 0;
+      const diffTotal = rateTotal - minWage;
+      const j82 = rateTotal >= minWage ? 'ok' : 'ng';
+      setJ('j8-2', j82);
+      setP('proc8-2',
+        '【総額（固定残業代込み）の検証】\n' +
+        '月額総賃金: ' + monthly.toLocaleString() + '円（基本給 ' + basicMonthly.toLocaleString() + '円 + 固定残業代 ' + fixedOT.toLocaleString() + '円）\n' +
+        '年額総賃金: ' + monthly.toLocaleString() + '円 × 12ヶ月 = ' + annualTotal.toLocaleString() + '円\n' +
+        '年間総労働時間: ' + annWorkH.toFixed(1) + '時間\n' +
+        '時間換算額: ' + annualTotal.toLocaleString() + '円 ÷ ' + annWorkH.toFixed(1) + '時間 = ' + rateTotal.toFixed(2) + '円/時間\n' +
+        '最低賃金:   ' + minWage.toLocaleString() + '円/時間\n' +
+        '差額:       ' + (diffTotal >= 0 ? '+' : '') + diffTotal.toFixed(2) + '円/時間\n' +
+        '判  定: ' + (j82==='ok' ? '○ 最低賃金以上' : '✗ 最低賃金未満（' + Math.abs(diffTotal).toFixed(2) + '円/時間 不足）'));
+      result['8-2'] = j82;
+    }
+
+    return result;
 
   } else if (wageType === 'daily') {
     const daily = parseFloat(document.getElementById('dailySalary').value) || 0;
@@ -1237,13 +1305,20 @@ function calcS8() {
       setP('proc8-1', '① 労働時間タブで始業・終業・休憩を先に設定してください。\n判定: △');
       return { '8-1': 'warn' };
     }
-    hourlyRate = daily / dailyH;
-    inputLabel = '日給: ' + daily.toLocaleString() + '円';
-    calcDetail =
+    const hourlyRate = daily / dailyH;
+    const diff = hourlyRate - minWage;
+    const j81 = hourlyRate >= minWage ? 'ok' : 'ng';
+    setJ('j8-1', j81);
+    setP('proc8-1',
+      '適用最低賃金: ' + pref + ' ' + minWage.toLocaleString() + '円/時間\n' +
+      '日給: ' + daily.toLocaleString() + '円\n\n' +
       '【時間換算額の計算】\n' +
       '  1日の所定労働時間: ' + dailyH.toFixed(2) + '時間\n' +
-      '  ' + daily.toLocaleString() + '円 ÷ ' + dailyH.toFixed(2) + '時間\n' +
-      '  = ' + hourlyRate.toFixed(2) + '円/時間';
+      '  ' + daily.toLocaleString() + '円 ÷ ' + dailyH.toFixed(2) + '時間 = ' + hourlyRate.toFixed(2) + '円/時間\n\n' +
+      '最低賃金:   ' + minWage.toLocaleString() + '円/時間\n' +
+      '差額:       ' + (diff >= 0 ? '+' : '') + diff.toFixed(2) + '円/時間\n' +
+      '判  定: ' + (j81==='ok' ? '○ 最低賃金以上' : '✗ 最低賃金未満（' + Math.abs(diff).toFixed(2) + '円/時間 不足）'));
+    return { '8-1': j81 };
 
   } else {
     const hourly = parseFloat(document.getElementById('hourlySalary').value) || 0;
@@ -1252,27 +1327,17 @@ function calcS8() {
       setP('proc8-1', '時給が入力されていません。\n判定: △');
       return { '8-1': 'warn' };
     }
-    hourlyRate = hourly;
-    inputLabel = '時給: ' + hourly.toLocaleString() + '円';
-    calcDetail = '時給制のため換算不要\n時間換算額: ' + hourlyRate.toFixed(2) + '円/時間';
+    const diff = hourly - minWage;
+    const j81 = hourly >= minWage ? 'ok' : 'ng';
+    setJ('j8-1', j81);
+    setP('proc8-1',
+      '適用最低賃金: ' + pref + ' ' + minWage.toLocaleString() + '円/時間\n' +
+      '時給: ' + hourly.toLocaleString() + '円/時間（時給制のため換算不要）\n\n' +
+      '最低賃金:   ' + minWage.toLocaleString() + '円/時間\n' +
+      '差額:       ' + (diff >= 0 ? '+' : '') + diff.toFixed(2) + '円/時間\n' +
+      '判  定: ' + (j81==='ok' ? '○ 最低賃金以上' : '✗ 最低賃金未満（' + Math.abs(diff).toFixed(2) + '円/時間 不足）'));
+    return { '8-1': j81 };
   }
-
-  const diff = hourlyRate - minWage;
-  const j81 = hourlyRate >= minWage ? 'ok' : 'ng';
-  setJ('j8-1', j81);
-  setP('proc8-1',
-    '適用最低賃金: ' + pref + ' ' + minWage.toLocaleString() + '円/時間\n' +
-    inputLabel + '\n\n' +
-    calcDetail + '\n\n' +
-    '【最低賃金との比較】\n' +
-    '  時間換算額: ' + hourlyRate.toFixed(2) + '円/時間\n' +
-    '  最低賃金:   ' + minWage.toLocaleString() + '円/時間\n' +
-    '  差額:       ' + (diff >= 0 ? '+' : '') + diff.toFixed(2) + '円/時間\n' +
-    '判  定: ' + (j81==='ok'
-      ? '○ 最低賃金以上'
-      : '✗ 最低賃金未満（' + Math.abs(diff).toFixed(2) + '円/時間 不足）'));
-
-  return { '8-1': j81 };
 }
 
 function recalcAll() {
@@ -1314,46 +1379,6 @@ function updateWeekdayStyle() {
 }
 
 // ────────────────────────────────────────────────
-// Individual holidays – uses DOM API (no innerHTML with user data)
-// ────────────────────────────────────────────────
-function addIndividualHoliday() {
-  const date = document.getElementById('newHolidayDate').value;
-  const name = document.getElementById('newHolidayName').value.trim() || '休日';
-  if (!date) { alert('日付を入力してください'); return; }
-  if (individualHolidays.some(h => h.date === date)) { alert('この日付は既に追加されています'); return; }
-  individualHolidays.push({ date, name });
-  individualHolidays.sort((a,b) => a.date.localeCompare(b.date));
-  document.getElementById('newHolidayDate').value = '';
-  document.getElementById('newHolidayName').value = '';
-  renderIndividualHolidays();
-  recalcAll(); saveAll();
-}
-function removeIndividualHoliday(idx) {
-  individualHolidays.splice(idx, 1);
-  renderIndividualHolidays();
-  recalcAll(); saveAll();
-}
-function renderIndividualHolidays() {
-  const list = document.getElementById('individualHolidayList');
-  while (list.firstChild) list.removeChild(list.firstChild);
-  individualHolidays.forEach((h, i) => {
-    const li   = document.createElement('li');
-    const date = document.createElement('span');
-    date.textContent = h.date;
-    const nameSp = document.createElement('span');
-    nameSp.textContent = h.name;
-    const btn = document.createElement('span');
-    btn.className = 'remove-btn no-print';
-    btn.textContent = '✕';
-    btn.onclick = () => removeIndividualHoliday(i);
-    li.appendChild(date);
-    li.appendChild(nameSp);
-    li.appendChild(btn);
-    list.appendChild(li);
-  });
-}
-
-// ────────────────────────────────────────────────
 // LocalStorage
 // ────────────────────────────────────────────────
 const LS_KEY = 'hwLaborChecker_v1';
@@ -1370,7 +1395,7 @@ function saveAll() {
     specialClause:gv('specialClause'), specialMonthlyOT:gv('specialMonthlyOT'), specialAnnualOT:gv('specialAnnualOT'),
     breakException:gv('breakException'),
     weekdays: Array.from({length:7}, (_,i) => gc('wd'+i)),
-    holidayType:gv('holidayType'), individualHolidays,
+    holidayType:gv('holidayType'), additionalHolidays:gv('additionalHolidays'),
     flexType:gv('flexType'),
     flexMonthlyAgreement:gv('flexMonthlyAgreement'), flexMonthlyReport:gv('flexMonthlyReport'), flexMonthlyTotal:gv('flexMonthlyTotal'),
     flexAnnualAgreement:gv('flexAnnualAgreement'), flexAnnualMaxDay:gv('flexAnnualMaxDay'), flexAnnualMaxWeek:gv('flexAnnualMaxWeek'),
@@ -1378,7 +1403,8 @@ function saveAll() {
     employmentType:gv('employmentType'), partTimeDays:gv('partTimeDays'), hourlyLeave:gv('hourlyLeave'),
     otRate:gv('otRate'), nightRate:gv('nightRate'), holidayRate:gv('holidayRate'), ot60Rate:gv('ot60Rate'),
     prefecture:gv('prefecture'), minWage:gv('minWage'),
-    wageType:gv('wageType'), monthlySalary:gv('monthlySalary'), dailySalary:gv('dailySalary'), hourlySalary:gv('hourlySalary')
+    wageType:gv('wageType'), monthlySalary:gv('monthlySalary'), fixedOT:gv('fixedOT'),
+    dailySalary:gv('dailySalary'), hourlySalary:gv('hourlySalary')
   };
   try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch(e) {}
 }
@@ -1393,8 +1419,7 @@ function loadAll() {
   sv('specialClause',d.specialClause); sv('specialMonthlyOT',d.specialMonthlyOT); sv('specialAnnualOT',d.specialAnnualOT);
   sv('breakException',d.breakException);
   if (Array.isArray(d.weekdays)) d.weekdays.forEach((v,i) => sc('wd'+i, v));
-  sv('holidayType',d.holidayType);
-  if (Array.isArray(d.individualHolidays)) { individualHolidays = d.individualHolidays; renderIndividualHolidays(); }
+  sv('holidayType',d.holidayType); sv('additionalHolidays',d.additionalHolidays);
   sv('flexType',d.flexType);
   sv('flexMonthlyAgreement',d.flexMonthlyAgreement); sv('flexMonthlyReport',d.flexMonthlyReport); sv('flexMonthlyTotal',d.flexMonthlyTotal);
   sv('flexAnnualAgreement',d.flexAnnualAgreement); sv('flexAnnualMaxDay',d.flexAnnualMaxDay); sv('flexAnnualMaxWeek',d.flexAnnualMaxWeek);
@@ -1402,14 +1427,14 @@ function loadAll() {
   sv('employmentType',d.employmentType); sv('partTimeDays',d.partTimeDays); sv('hourlyLeave',d.hourlyLeave);
   sv('otRate',d.otRate); sv('nightRate',d.nightRate); sv('holidayRate',d.holidayRate); sv('ot60Rate',d.ot60Rate);
   sv('prefecture',d.prefecture); sv('minWage',d.minWage);
-  sv('wageType',d.wageType); sv('monthlySalary',d.monthlySalary); sv('dailySalary',d.dailySalary); sv('hourlySalary',d.hourlySalary);
+  sv('wageType',d.wageType); sv('monthlySalary',d.monthlySalary); sv('fixedOT',d.fixedOT);
+  sv('dailySalary',d.dailySalary); sv('hourlySalary',d.hourlySalary);
   showWageFields();
 }
 
 function resetAll() {
   if (!confirm('入力内容をすべてリセットします。よろしいですか？')) return;
   localStorage.removeItem(LS_KEY);
-  individualHolidays = [];
   location.reload();
 }
 
