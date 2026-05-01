@@ -654,6 +654,12 @@
         <input type="number" id="fixedOT" placeholder="例: 20000" min="0" style="max-width:150px" oninput="recalcAll(); saveAll()">
         <div style="font-size:11px;color:#718096;margin-top:3px">月給に固定残業手当が含まれる場合に入力（入力すると基本給単独でも最低賃金を検証します）</div>
       </div>
+      <div class="form-group" id="fixedOTHoursGroup" style="display:none">
+        <label>固定残業の設定時間（月・任意）（時間）</label>
+        <input type="number" id="fixedOTHours" placeholder="例: 20" min="0" max="100" style="max-width:90px" oninput="recalcAll(); saveAll()">
+        <span style="margin-left:4px">時間/月</span>
+        <div style="font-size:11px;color:#718096;margin-top:3px">固定残業代が何時間分の時間外労働を対象としているかを入力（入力すると固定残業代の時間単価が最低賃金×割増率以上かを検証します）</div>
+      </div>
     </div>
     <div id="wageDaily" style="display:none">
       <div class="form-group">
@@ -687,6 +693,16 @@
         <span class="judgment" id="j8-2">－</span>
       </div>
       <div class="process-box" id="proc8-2">（計算待ち）</div>
+    </div>
+    <div class="check-item" id="check8-3" style="display:none">
+      <div class="check-header">
+        <div>
+          <div class="check-label">8-3：固定残業代の時間単価チェック</div>
+          <div class="check-sub">固定残業代 ÷ 設定時間 ≥ 最低賃金 × 時間外割増率（⑦の設定値）</div>
+        </div>
+        <span class="judgment" id="j8-3">－</span>
+      </div>
+      <div class="process-box" id="proc8-3">（計算待ち）</div>
     </div>
   </div>
 
@@ -1109,11 +1125,12 @@ const ITEM_LABELS = {
   '5-1':'⑤-1 書類整備',           '5-2':'⑤-2 1日・週の上限時間',
   '7-1':'⑦-1 時間外・深夜割増率', '7-2':'⑦-2 休日労働割増率',
   '7-3':'⑦-3 月60時間超割増率',
-  '8-1':'⑧-1 基本給のみの最低賃金比較', '8-2':'⑧-2 総額（固定残業代込み）の最低賃金比較'
+  '8-1':'⑧-1 基本給のみの最低賃金比較', '8-2':'⑧-2 総額（固定残業代込み）の最低賃金比較',
+  '8-3':'⑧-3 固定残業代の時間単価チェック'
 };
 const SECTION_KEYS = [
   ['1-1','1-2'],['2-1','2-2','2-3'],['3-1','3-2'],
-  ['4-1','4-2','4-3'],['5-1','5-2','5-3'],['6-1','6-2'],['7-1','7-2','7-3'],['8-1','8-2']
+  ['4-1','4-2','4-3'],['5-1','5-2','5-3'],['6-1','6-2'],['7-1','7-2','7-3'],['8-1','8-2','8-3']
 ];
 
 function updateOverall(results) {
@@ -1204,8 +1221,9 @@ function calcS8() {
   const dailyH = dm / 60;
   const pref = document.getElementById('prefecture').value || '（未選択）';
 
-  // hide check 8-2 by default; shown only when fixedOT is entered for monthly wages
+  // hide optional check items by default
   document.getElementById('check8-2').style.display = 'none';
+  document.getElementById('check8-3').style.display = 'none';
 
   if (minWage <= 0) {
     setJ('j8-1', 'warn');
@@ -1216,6 +1234,11 @@ function calcS8() {
   if (wageType === 'monthly') {
     const monthly = parseFloat(document.getElementById('monthlySalary').value) || 0;
     const fixedOT = parseFloat(document.getElementById('fixedOT').value) || 0;
+    const fixedOTHours = parseFloat(document.getElementById('fixedOTHours').value) || 0;
+
+    // show/hide the fixedOTHours input field
+    document.getElementById('fixedOTHoursGroup').style.display = fixedOT > 0 ? 'block' : 'none';
+
     if (monthly <= 0) {
       setJ('j8-1', 'warn');
       setP('proc8-1', '月給が入力されていません。\n判定: △');
@@ -1289,6 +1312,30 @@ function calcS8() {
         '差額:       ' + (diffTotal >= 0 ? '+' : '') + diffTotal.toFixed(2) + '円/時間\n' +
         '判  定: ' + (j82==='ok' ? '○ 最低賃金以上' : '✗ 最低賃金未満（' + Math.abs(diffTotal).toFixed(2) + '円/時間 不足）'));
       result['8-2'] = j82;
+
+      // 8-3: fixed OT hourly rate check — shown only when fixedOTHours > 0
+      if (fixedOTHours > 0) {
+        document.getElementById('check8-3').style.display = 'block';
+        const otRate = parseFloat(document.getElementById('otRate').value) || 25;
+        const requiredRate = minWage * (1 + otRate / 100);
+        const fixedOTHourlyRate = fixedOT / fixedOTHours;
+        const diff83 = fixedOTHourlyRate - requiredRate;
+        const j83 = fixedOTHourlyRate >= requiredRate ? 'ok' : 'ng';
+        setJ('j8-3', j83);
+        setP('proc8-3',
+          '【固定残業代の時間単価チェック】\n' +
+          '固定残業代（月額）: ' + fixedOT.toLocaleString() + '円\n' +
+          '設定残業時間（月）: ' + fixedOTHours + '時間\n' +
+          '固定残業代の時間単価: ' + fixedOT.toLocaleString() + '円 ÷ ' + fixedOTHours + '時間 = ' + fixedOTHourlyRate.toFixed(2) + '円/時間\n\n' +
+          '【時間外労働に必要な最低単価】\n' +
+          '最低賃金:           ' + minWage.toLocaleString() + '円/時間\n' +
+          '時間外割増率:       ' + otRate + '%（⑦ 割増賃金の設定値）\n' +
+          '必要な時間単価:     ' + minWage.toLocaleString() + '円 × ' + (1 + otRate/100).toFixed(2) + ' = ' + requiredRate.toFixed(2) + '円/時間\n\n' +
+          '固定残業代の時間単価: ' + fixedOTHourlyRate.toFixed(2) + '円/時間\n' +
+          '差額:               ' + (diff83 >= 0 ? '+' : '') + diff83.toFixed(2) + '円/時間\n' +
+          '判  定: ' + (j83==='ok' ? '○ 最低賃金×割増率以上' : '✗ 不足（' + Math.abs(diff83).toFixed(2) + '円/時間 不足）'));
+        result['8-3'] = j83;
+      }
     }
 
     return result;
@@ -1403,7 +1450,7 @@ function saveAll() {
     employmentType:gv('employmentType'), partTimeDays:gv('partTimeDays'), hourlyLeave:gv('hourlyLeave'),
     otRate:gv('otRate'), nightRate:gv('nightRate'), holidayRate:gv('holidayRate'), ot60Rate:gv('ot60Rate'),
     prefecture:gv('prefecture'), minWage:gv('minWage'),
-    wageType:gv('wageType'), monthlySalary:gv('monthlySalary'), fixedOT:gv('fixedOT'),
+    wageType:gv('wageType'), monthlySalary:gv('monthlySalary'), fixedOT:gv('fixedOT'), fixedOTHours:gv('fixedOTHours'),
     dailySalary:gv('dailySalary'), hourlySalary:gv('hourlySalary')
   };
   try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch(e) {}
@@ -1427,7 +1474,7 @@ function loadAll() {
   sv('employmentType',d.employmentType); sv('partTimeDays',d.partTimeDays); sv('hourlyLeave',d.hourlyLeave);
   sv('otRate',d.otRate); sv('nightRate',d.nightRate); sv('holidayRate',d.holidayRate); sv('ot60Rate',d.ot60Rate);
   sv('prefecture',d.prefecture); sv('minWage',d.minWage);
-  sv('wageType',d.wageType); sv('monthlySalary',d.monthlySalary); sv('fixedOT',d.fixedOT);
+  sv('wageType',d.wageType); sv('monthlySalary',d.monthlySalary); sv('fixedOT',d.fixedOT); sv('fixedOTHours',d.fixedOTHours);
   sv('dailySalary',d.dailySalary); sv('hourlySalary',d.hourlySalary);
   showWageFields();
 }
