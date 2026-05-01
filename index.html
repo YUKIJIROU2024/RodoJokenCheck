@@ -697,8 +697,8 @@
     <div class="check-item" id="check8-3" style="display:none">
       <div class="check-header">
         <div>
-          <div class="check-label">8-3：固定残業代の時間単価チェック</div>
-          <div class="check-sub">固定残業代 ÷ 設定時間 ≥ 最低賃金 × 時間外割増率（⑦の設定値）</div>
+          <div class="check-label">8-3：固定残業代の適正額チェック（法定内外で按分）</div>
+          <div class="check-sub">法定外時間外: 最低賃金×割増率 ／ 法定内時間外: 最低賃金×1.00</div>
         </div>
         <span class="judgment" id="j8-3">－</span>
       </div>
@@ -1126,7 +1126,7 @@ const ITEM_LABELS = {
   '7-1':'⑦-1 時間外・深夜割増率', '7-2':'⑦-2 休日労働割増率',
   '7-3':'⑦-3 月60時間超割増率',
   '8-1':'⑧-1 基本給のみの最低賃金比較', '8-2':'⑧-2 総額（固定残業代込み）の最低賃金比較',
-  '8-3':'⑧-3 固定残業代の時間単価チェック'
+  '8-3':'⑧-3 固定残業代の適正額チェック'
 };
 const SECTION_KEYS = [
   ['1-1','1-2'],['2-1','2-2','2-3'],['3-1','3-2'],
@@ -1313,27 +1313,63 @@ function calcS8() {
         '判  定: ' + (j82==='ok' ? '○ 最低賃金以上' : '✗ 最低賃金未満（' + Math.abs(diffTotal).toFixed(2) + '円/時間 不足）'));
       result['8-2'] = j82;
 
-      // 8-3: fixed OT hourly rate check — shown only when fixedOTHours > 0
+      // 8-3: fixed OT adequacy check (splitting statutory vs within-statutory OT)
       if (fixedOTHours > 0) {
         document.getElementById('check8-3').style.display = 'block';
         const otRate = parseFloat(document.getElementById('otRate').value) || 25;
-        const requiredRate = minWage * (1 + otRate / 100);
+        const premiumRate = 1 + otRate / 100;
+        const legalAnnualH = weeklyLimit() * 52;
+        const annualExcessH = annWorkH - legalAnnualH;   // negative → no statutory OT
+        const monthlyStatOTH = Math.max(0, annualExcessH / 12);  // 法定外時間外/月
+
+        // split fixedOTHours into statutory OT (premium) and within-statutory OT (base rate)
+        const statOTh    = Math.min(fixedOTHours, monthlyStatOTH);  // 法定外分
+        const withinOTh  = Math.max(0, fixedOTHours - monthlyStatOTH); // 法定内分
+
+        const reqForStat   = statOTh   * minWage * premiumRate;
+        const reqForWithin = withinOTh * minWage;
+        const requiredAmount = reqForStat + reqForWithin;
+
         const fixedOTHourlyRate = fixedOT / fixedOTHours;
-        const diff83 = fixedOTHourlyRate - requiredRate;
-        const j83 = fixedOTHourlyRate >= requiredRate ? 'ok' : 'ng';
+        const diff83 = fixedOT - requiredAmount;
+        const j83 = fixedOT >= requiredAmount ? 'ok' : 'ng';
         setJ('j8-3', j83);
-        setP('proc8-3',
-          '【固定残業代の時間単価チェック】\n' +
+
+        let proc83 =
           '固定残業代（月額）: ' + fixedOT.toLocaleString() + '円\n' +
           '設定残業時間（月）: ' + fixedOTHours + '時間\n' +
           '固定残業代の時間単価: ' + fixedOT.toLocaleString() + '円 ÷ ' + fixedOTHours + '時間 = ' + fixedOTHourlyRate.toFixed(2) + '円/時間\n\n' +
-          '【時間外労働に必要な最低単価】\n' +
-          '最低賃金:           ' + minWage.toLocaleString() + '円/時間\n' +
-          '時間外割増率:       ' + otRate + '%（⑦ 割増賃金の設定値）\n' +
-          '必要な時間単価:     ' + minWage.toLocaleString() + '円 × ' + (1 + otRate/100).toFixed(2) + ' = ' + requiredRate.toFixed(2) + '円/時間\n\n' +
-          '固定残業代の時間単価: ' + fixedOTHourlyRate.toFixed(2) + '円/時間\n' +
-          '差額:               ' + (diff83 >= 0 ? '+' : '') + diff83.toFixed(2) + '円/時間\n' +
-          '判  定: ' + (j83==='ok' ? '○ 最低賃金×割増率以上' : '✗ 不足（' + Math.abs(diff83).toFixed(2) + '円/時間 不足）'));
+          '【法定外・法定内の内訳計算】\n' +
+          '年間総労働時間:       ' + annWorkH.toFixed(1) + '時間（①の設定値）\n' +
+          '年間法定上限時間:     ' + legalAnnualH + '時間（週' + weeklyLimit() + '時間 × 52週' + (isSpecial() ? '・特例措置適用' : '') + '）\n' +
+          '差分（法定外/年間）:  ' + annWorkH.toFixed(1) + ' − ' + legalAnnualH + ' = ' + annualExcessH.toFixed(1) + '時間\n';
+
+        if (annualExcessH <= 0) {
+          proc83 += '→ 法定外時間外なし（年間労働時間が法定上限以内）\n';
+        } else {
+          proc83 += '月割り法定外時間:     ' + annualExcessH.toFixed(1) + '時間 ÷ 12ヶ月 = ' + monthlyStatOTH.toFixed(2) + '時間/月\n';
+        }
+
+        proc83 += '\n【設定残業時間の内訳（月 ' + fixedOTHours + '時間）】\n';
+        if (statOTh > 0) {
+          proc83 += '法定外時間外: ' + statOTh.toFixed(2) + '時間（割増' + otRate + '%）\n';
+        }
+        proc83 += '法定内時間外: ' + withinOTh.toFixed(2) + '時間（割増なし）\n';
+
+        proc83 +=
+          '\n【必要な固定残業代額（最低賃金 ' + minWage.toLocaleString() + '円/時間 ベース）】\n';
+        if (statOTh > 0) {
+          proc83 += '法定外: ' + statOTh.toFixed(2) + '時間 × ' + minWage.toLocaleString() + '円 × ' + premiumRate.toFixed(2) + ' = ' + Math.round(reqForStat) + '円\n';
+        }
+        if (withinOTh > 0) {
+          proc83 += '法定内: ' + withinOTh.toFixed(2) + '時間 × ' + minWage.toLocaleString() + '円 × 1.00 = ' + Math.round(reqForWithin) + '円\n';
+        }
+        proc83 +=
+          '必要額合計:   ' + Math.round(requiredAmount) + '円/月\n' +
+          '固定残業代:   ' + fixedOT.toLocaleString() + '円/月\n' +
+          '差額:         ' + (diff83 >= 0 ? '+' : '') + Math.round(diff83) + '円/月\n' +
+          '判  定: ' + (j83==='ok' ? '○ 最低賃金基準を満たす' : '✗ 不足（' + Math.round(Math.abs(diff83)) + '円/月 不足）');
+        setP('proc8-3', proc83);
         result['8-3'] = j83;
       }
     }
