@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ハローワーク 労働条件チェッカー</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Meiryo", "Yu Gothic", "MS Gothic", sans-serif; background: #eef2f7; color: #1a202c; font-size: 14px; line-height: 1.5; }
+
+    .app-header { background: #1a3a6e; color: white; padding: 14px 20px; }
+    .app-header h1 { font-size: 18px; margin-bottom: 10px; letter-spacing: 0.05em; }
+    .header-inputs { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; }
+    .header-field label { display: block; font-size: 11px; color: #aac; margin-bottom: 3px; }
+    .header-field input { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.35); color: white; padding: 5px 10px; border-radius: 4px; font-size: 14px; }
+    .header-field input::placeholder { color: rgba(255,255,255,0.5); }
+    .header-field input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+
+    .special-measure-wrap { max-width: 960px; margin: 10px auto; padding: 0 16px; }
+    .special-measure { background: #fef9e7; border: 1px solid #f0a500; border-radius: 6px; padding: 10px 14px; display: flex; align-items: flex-start; gap: 10px; }
+    .special-measure input[type="checkbox"] { margin-top: 2px; width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; }
+    .special-measure label { cursor: pointer; font-size: 13px; }
+    .special-measure .sm-note { font-size: 11px; color: #8a6000; margin-top: 2px; }
+
+    .tabs-wrap { background: #fff; border-bottom: 2px solid #1a3a6e; overflow-x: auto; }
+    .tabs { display: flex; max-width: 960px; margin: 0 auto; }
+    .tab { padding: 10px 14px; cursor: pointer; white-space: nowrap; color: #555; font-size: 13px; border-bottom: 3px solid transparent; margin-bottom: -2px; user-select: none; }
+    .tab.active { color: #1a3a6e; font-weight: bold; border-bottom-color: #1a3a6e; }
+    .tab:hover:not(.active) { background: #f5f7fa; }
+    .tab .badge { display: inline-block; min-width: 18px; height: 18px; border-radius: 9px; font-size: 11px; text-align: center; line-height: 18px; margin-left: 5px; padding: 0 3px; font-weight: bold; }
+    .badge-ok   { background: #d1fae5; color: #065f46; }
+    .badge-warn { background: #fef3c7; color: #92400e; }
+    .badge-ng   { background: #fee2e2; color: #991b1b; }
+
+    .panels { max-width: 960px; margin: 0 auto; }
+    .section-panel { display: none; padding: 18px 16px; }
+    .section-panel.active { display: block; }
+
+    .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; }
+    .section-num { background: #1a3a6e; color: white; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 15px; flex-shrink: 0; }
+    .section-title { font-size: 17px; font-weight: bold; color: #1a3a6e; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 12px; color: #4a5568; margin-bottom: 4px; font-weight: bold; }
+    .form-group input[type="time"],
+    .form-group input[type="number"],
+    .form-group input[type="text"],
+    .form-group input[type="date"],
+    .form-group select {
+      border: 1px solid #cbd5e0; border-radius: 5px; padding: 6px 10px;
+      font-size: 14px; width: 100%; max-width: 220px; background: white; font-family: inherit;
+    }
+    .form-group input:focus, .form-group select:focus { outline: 2px solid #4a90d9; }
+    .form-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+    .form-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .weekday-checks { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .weekday-label { display: flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid #cbd5e0; border-radius: 20px; cursor: pointer; font-size: 13px; background: white; transition: background 0.15s; user-select: none; }
+    .weekday-label:hover { background: #eef2f7; }
+    .weekday-label input[type="checkbox"] { width: 14px; height: 14px; }
+    .weekday-label.is-holiday { background: #fef3c7; border-color: #f0a500; }
+
+    .check-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; background: white; }
+    .check-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .check-label { font-weight: bold; color: #2d3748; font-size: 13px; }
+    .check-sub { font-size: 11px; color: #718096; margin-top: 2px; }
+
+    .judgment { font-size: 22px; font-weight: bold; line-height: 1; flex-shrink: 0; margin-left: 10px; }
+    .j-ok   { color: #059669; }
+    .j-warn { color: #d97706; }
+    .j-ng   { color: #dc2626; }
+    .j-info { color: #6b7280; font-size: 13px !important; }
+
+    .process-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; padding: 10px 12px; font-size: 12px; font-family: "Consolas", "Courier New", monospace; white-space: pre-wrap; color: #4a5568; margin-top: 6px; line-height: 1.7; }
+    .info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #1e40af; margin-bottom: 14px; }
+
+    .holiday-list { list-style: none; margin-top: 6px; }
+    .holiday-list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .remove-btn { cursor: pointer; color: #dc2626; font-size: 16px; padding: 0 4px; line-height: 1; }
+    .remove-btn:hover { background: #fee2e2; border-radius: 3px; }
+
+    .overall-wrap { max-width: 960px; margin: 0 auto; padding: 0 16px 16px; }
+    .overall-judgment { background: white; border: 2px solid #1a3a6e; border-radius: 10px; padding: 18px 20px; }
+    .overall-judgment h2 { color: #1a3a6e; font-size: 16px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; }
+    .judgment-counts { display: flex; gap: 24px; font-size: 20px; font-weight: bold; margin-bottom: 14px; }
+    .issues-list { list-style: none; }
+    .issues-list li { padding: 4px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+    .issue-marker-ng   { color: #dc2626; font-weight: bold; }
+    .issue-marker-warn { color: #d97706; font-weight: bold; }
+    .all-ok-msg { color: #059669; font-weight: bold; padding: 4px 0; }
+    .warn-note  { font-size: 12px; color: #92400e; margin-top: 8px; }
+
+    .actions { text-align: center; padding: 16px; }
+    .btn { padding: 10px 28px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: bold; margin: 5px; font-family: inherit; }
+    .btn-print { background: #059669; color: white; }
+    .btn-print:hover { background: #047857; }
+    .btn-reset { background: #6b7280; color: white; }
+    .btn-reset:hover { background: #4b5563; }
+    .btn-small { padding: 5px 12px; font-size: 12px; background: #1a3a6e; color: white; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; }
+
+    @media print {
+      body { background: white; font-size: 11px; }
+      .app-header { background: #1a3a6e !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 8px 12px; }
+      .tabs-wrap, .actions, .no-print { display: none !important; }
+      .section-panel { display: block !important; page-break-inside: avoid; }
+      .overall-wrap { page-break-before: always; }
+      .special-measure-wrap { margin: 4px 0; }
+      .section-header { margin-bottom: 10px; }
+      .check-item { break-inside: avoid; }
+      .process-box { font-size: 10px; }
+      .panels { padding: 0 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>ハローワーク 労働条件チェッカー</h1>
+  <div class="header-inputs">
+    <div class="header-field">
+      <label>事業所名</label>
+      <input type="text" id="businessName" placeholder="例: 株式会社〇〇" oninput="saveAll()">
+    </div>
+    <div class="header-field">
+      <label>チェック日</label>
+      <input type="date" id="checkDate" oninput="saveAll()">
+    </div>
+  </div>
+</div>
+
+<div class="special-measure-wrap">
+  <div class="special-measure">
+    <input type="checkbox" id="specialMeasure" onchange="recalcAll(); saveAll()">
+    <label for="specialMeasure">
+      <strong>特例措置対象事業場</strong>
+      （常時使用する労働者数が10人未満の 商業・映画演劇業・保健衛生業・接客娯楽業）
+      <div class="sm-note">✓ の場合、週法定労働時間の上限が 40時間 → <strong>44時間</strong> に変わります（労基法第40条）</div>
+    </label>
+  </div>
+</div>
+
+<div class="tabs-wrap">
+  <div class="tabs">
+    <div class="tab active" onclick="showTab(0)">① 労働時間 <span id="badge0" class="badge"></span></div>
+    <div class="tab" onclick="showTab(1)">② 時間外・休日労働 <span id="badge1" class="badge"></span></div>
+    <div class="tab" onclick="showTab(2)">③ 休憩 <span id="badge2" class="badge"></span></div>
+    <div class="tab" onclick="showTab(3)">④ 休日 <span id="badge3" class="badge"></span></div>
+    <div class="tab" onclick="showTab(4)">⑤ 変形労働時間制 <span id="badge4" class="badge"></span></div>
+    <div class="tab" onclick="showTab(5)">⑥ 年次有給休暇 <span id="badge5" class="badge"></span></div>
+    <div class="tab" onclick="showTab(6)">⑦ 割増賃金 <span id="badge6" class="badge"></span></div>
+    <div class="tab" onclick="showTab(7)">⑧ 最低賃金 <span id="badge7" class="badge"></span></div>
+  </div>
+</div>
+
+<div class="panels">
+
+  <!-- ① 労働時間 -->
+  <div class="section-panel active" id="panel0">
+    <div class="section-header">
+      <div class="section-num">①</div>
+      <div class="section-title">労働時間</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>始業時間</label>
+        <input type="time" id="startTime" value="09:00" oninput="recalcAll(); saveAll()">
+      </div>
+      <div class="form-group">
+        <label>終業時間</label>
+        <input type="time" id="endTime" value="18:00" oninput="recalcAll(); saveAll()">
+      </div>
+      <div class="form-group">
+        <label>休憩時間（分）</label>
+        <input type="number" id="breakTime" value="60" min="0" max="480" style="max-width:100px" oninput="recalcAll(); saveAll()">
+      </div>
+    </div>
+    <div class="info-box">
+      週の就業日数はタブ「④ 休日」で設定した休日から自動計算されます。変形労働時間制を採用する場合は「⑤ 変形労働時間制」タブも設定してください。
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">1-1：1日の所定労働時間</div><div class="check-sub">労基法 第32条2項 ／ 法定上限 8時間</div></div>
+        <span class="judgment" id="j1-1">－</span>
+      </div>
+      <div class="process-box" id="proc1-1">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">1-2：週の所定労働時間</div><div class="check-sub">労基法 第32条1項 ／ 週40時間（特例措置対象は44時間）</div></div>
+        <span class="judgment" id="j1-2">－</span>
+      </div>
+      <div class="process-box" id="proc1-2">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">1-3：年間総労働時間（参考）</div><div class="check-sub">④ 休日の設定から推計</div></div>
+        <span class="judgment j-info" id="j1-3">参考</span>
+      </div>
+      <div class="process-box" id="proc1-3">（計算待ち）</div>
+    </div>
+  </div>
+
+  <!-- ② 時間外・休日労働 -->
+  <div class="section-panel" id="panel1">
+    <div class="section-header">
+      <div class="section-num">②</div>
+      <div class="section-title">時間外・休日労働</div>
+    </div>
+    <div class="form-group">
+      <label>時間外・休日労働の有無と36協定</label>
+      <select id="s36agreement" onchange="recalcAll(); saveAll()">
+        <option value="none">時間外・休日労働はさせない（36協定不要）</option>
+        <option value="filed">時間外・休日労働あり・36協定 届出済</option>
+        <option value="not_filed">時間外・休日労働あり・36協定 未届出</option>
+      </select>
+    </div>
+    <div id="s36details" style="display:none">
+      <div class="form-row">
+        <div class="form-group">
+          <label>月間時間外労働の上限（時間）</label>
+          <input type="number" id="monthlyOT" value="45" min="0" max="720" style="max-width:100px" oninput="recalcAll(); saveAll()">
+        </div>
+        <div class="form-group">
+          <label>年間時間外労働の上限（時間）</label>
+          <input type="number" id="annualOT" value="360" min="0" max="720" style="max-width:100px" oninput="recalcAll(); saveAll()">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>特別条項（臨時的な特別上限）</label>
+        <select id="specialClause" onchange="recalcAll(); saveAll()">
+          <option value="none">なし</option>
+          <option value="yes">あり（特別条項付き36協定）</option>
+        </select>
+      </div>
+      <div id="specialClauseDetails" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>特別条項 月間上限（時間）</label>
+            <input type="number" id="specialMonthlyOT" value="80" min="0" max="100" style="max-width:100px" oninput="recalcAll(); saveAll()">
+          </div>
+          <div class="form-group">
+            <label>特別条項 年間上限（時間）</label>
+            <input type="number" id="specialAnnualOT" value="720" min="0" max="720" style="max-width:100px" oninput="recalcAll(); saveAll()">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">2-1：36協定の締結・届出</div><div class="check-sub">労基法 第36条</div></div>
+        <span class="judgment" id="j2-1">－</span>
+      </div>
+      <div class="process-box" id="proc2-1">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">2-2：時間外労働の上限（通常条項）</div><div class="check-sub">月45時間・年360時間が原則上限</div></div>
+        <span class="judgment" id="j2-2">－</span>
+      </div>
+      <div class="process-box" id="proc2-2">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">2-3：時間外労働の上限（特別条項）</div><div class="check-sub">月100時間未満・年720時間以内・複数月平均80時間以内</div></div>
+        <span class="judgment" id="j2-3">－</span>
+      </div>
+      <div class="process-box" id="proc2-3">（計算待ち）</div>
+    </div>
+  </div>
+
+  <!-- ③ 休憩 -->
+  <div class="section-panel" id="panel2">
+    <div class="section-header">
+      <div class="section-num">③</div>
+      <div class="section-title">休憩時間</div>
+    </div>
+    <div class="info-box">休憩時間・1日の労働時間はタブ「① 労働時間」の入力値と連動しています。</div>
+    <div class="form-group">
+      <label>一斉付与の適用除外（労使協定）</label>
+      <select id="breakException" onchange="recalcAll(); saveAll()">
+        <option value="no">なし（原則: 全員に一斉に与える）</option>
+        <option value="yes">あり（労使協定により適用除外）</option>
+      </select>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">3-1：休憩時間の長さ</div><div class="check-sub">労基法 第34条1項 ／ 6時間超→45分、8時間超→60分</div></div>
+        <span class="judgment" id="j3-1">－</span>
+      </div>
+      <div class="process-box" id="proc3-1">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">3-2：休憩の一斉付与</div><div class="check-sub">労基法 第34条2項 ／ 原則: 一斉付与（例外: 労使協定）</div></div>
+        <span class="judgment" id="j3-2">－</span>
+      </div>
+      <div class="process-box" id="proc3-2">（計算待ち）</div>
+    </div>
+  </div>
+
+  <!-- ④ 休日 -->
+  <div class="section-panel" id="panel3">
+    <div class="section-header">
+      <div class="section-num">④</div>
+      <div class="section-title">休日</div>
+    </div>
+    <div class="form-group">
+      <label>週の所定休日（✓ = 休日）</label>
+      <div class="weekday-checks">
+        <label class="weekday-label" id="wdLabel0"><input type="checkbox" id="wd0" onchange="updateWeekdayStyle(); recalcAll(); saveAll()"> 月</label>
+        <label class="weekday-label" id="wdLabel1"><input type="checkbox" id="wd1" onchange="updateWeekdayStyle(); recalcAll(); saveAll()"> 火</label>
+        <label class="weekday-label" id="wdLabel2"><input type="checkbox" id="wd2" onchange="updateWeekdayStyle(); recalcAll(); saveAll()"> 水</label>
+        <label class="weekday-label" id="wdLabel3"><input type="checkbox" id="wd3" onchange="updateWeekdayStyle(); recalcAll(); saveAll()"> 木</label>
+        <label class="weekday-label" id="wdLabel4"><input type="checkbox" id="wd4" onchange="updateWeekdayStyle(); recalcAll(); saveAll()"> 金</label>
+        <label class="weekday-label" id="wdLabel5"><input type="checkbox" id="wd5" checked onchange="updateWeekdayStyle(); recalcAll(); saveAll()"> 土</label>
+        <label class="weekday-label" id="wdLabel6"><input type="checkbox" id="wd6" checked onchange="updateWeekdayStyle(); recalcAll(); saveAll()"> 日</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>祝日の扱い</label>
+      <select id="holidayType" onchange="recalcAll(); saveAll()">
+        <option value="off">休日扱いする（年間休日・就業日数に反映）</option>
+        <option value="work">出勤日とする</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>個別休日（祝日以外の会社独自の休日）を追加</label>
+      <div class="form-inline" style="margin-bottom:6px">
+        <input type="date" id="newHolidayDate" style="max-width:150px">
+        <input type="text" id="newHolidayName" placeholder="名称（例: 夏季休暇）" style="max-width:180px">
+        <button class="btn-small no-print" onclick="addIndividualHoliday()">追加</button>
+      </div>
+      <ul id="individualHolidayList" class="holiday-list"></ul>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">4-1：法定休日（週1日以上）</div><div class="check-sub">労基法 第35条</div></div>
+        <span class="judgment" id="j4-1">－</span>
+      </div>
+      <div class="process-box" id="proc4-1">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">4-2：年間休日日数（参考）</div><div class="check-sub">105日以上が一般的目安</div></div>
+        <span class="judgment" id="j4-2">－</span>
+      </div>
+      <div class="process-box" id="proc4-2">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">4-3：法定休日労働の割増賃金</div><div class="check-sub">労基法 第37条 ／ 35%以上（⑦の設定値と連動）</div></div>
+        <span class="judgment" id="j4-3">－</span>
+      </div>
+      <div class="process-box" id="proc4-3">（計算待ち）</div>
+    </div>
+  </div>
+
+  <!-- ⑤ 変形労働時間制 -->
+  <div class="section-panel" id="panel4">
+    <div class="section-header">
+      <div class="section-num">⑤</div>
+      <div class="section-title">変形労働時間制</div>
+    </div>
+    <div class="form-group">
+      <label>変形労働時間制の採用</label>
+      <select id="flexType" onchange="showFlexDetails(); recalcAll(); saveAll()">
+        <option value="none">採用しない（通常の労働時間制）</option>
+        <option value="monthly">1ヶ月単位の変形労働時間制</option>
+        <option value="annual">1年単位の変形労働時間制</option>
+        <option value="flex">フレックスタイム制</option>
+      </select>
+    </div>
+
+    <div id="flexMonthly" style="display:none">
+      <div class="info-box">
+        1ヶ月以内の期間を平均して週40時間（特例44時間）以内であれば1日・1週の上限を超えられます。就業規則（または労使協定）に定め、所轄労働基準監督署へ届け出ること。
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>就業規則 / 労使協定</label>
+          <select id="flexMonthlyAgreement" onchange="recalcAll(); saveAll()">
+            <option value="yes">有・対応済</option>
+            <option value="no">なし（未整備）</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>労働基準監督署への届出</label>
+          <select id="flexMonthlyReport" onchange="recalcAll(); saveAll()">
+            <option value="yes">届出済</option>
+            <option value="no">未届出</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>1ヶ月の総所定労働時間（時間）</label>
+        <input type="number" id="flexMonthlyTotal" placeholder="例: 160" min="0" max="300" style="max-width:110px" oninput="recalcAll(); saveAll()">
+      </div>
+    </div>
+
+    <div id="flexAnnual" style="display:none">
+      <div class="info-box">
+        1年以内の期間で平均週40時間以内。1日上限10時間・週上限52時間。連続労働は最大6日（特定期間は12日）。労使協定を所轄労基署へ届け出ること。
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>労使協定・届出</label>
+          <select id="flexAnnualAgreement" onchange="recalcAll(); saveAll()">
+            <option value="yes">有・届出済</option>
+            <option value="no">なし / 未届出</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>1日の最長所定労働時間（時間）</label>
+          <input type="number" id="flexAnnualMaxDay" placeholder="上限10" min="0" max="12" style="max-width:110px" oninput="recalcAll(); saveAll()">
+        </div>
+        <div class="form-group">
+          <label>週の最長所定労働時間（時間）</label>
+          <input type="number" id="flexAnnualMaxWeek" placeholder="上限52" min="0" max="60" style="max-width:110px" oninput="recalcAll(); saveAll()">
+        </div>
+      </div>
+    </div>
+
+    <div id="flexFlex" style="display:none">
+      <div class="info-box">
+        清算期間（最大3ヶ月）内の総労働時間を定め、出退勤時間を自由に設定できます。清算期間1ヶ月超は労使協定を届け出ること。
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>清算期間</label>
+          <select id="flexFlexPeriod" onchange="recalcAll(); saveAll()">
+            <option value="1">1ヶ月</option>
+            <option value="2">2ヶ月</option>
+            <option value="3">3ヶ月</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>清算期間の総所定労働時間（時間）</label>
+          <input type="number" id="flexFlexTotal" placeholder="例: 160" min="0" max="600" style="max-width:110px" oninput="recalcAll(); saveAll()">
+        </div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">5-1：必要書類の整備</div><div class="check-sub">就業規則 / 労使協定 / 労基署届出</div></div>
+        <span class="judgment" id="j5-1">－</span>
+      </div>
+      <div class="process-box" id="proc5-1">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">5-2：1日・週の上限時間</div><div class="check-sub">各変形制の法定上限値</div></div>
+        <span class="judgment" id="j5-2">－</span>
+      </div>
+      <div class="process-box" id="proc5-2">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">5-3：清算期間の平均週労働時間</div><div class="check-sub">平均週40時間（特例44時間）以内</div></div>
+        <span class="judgment" id="j5-3">－</span>
+      </div>
+      <div class="process-box" id="proc5-3">（計算待ち）</div>
+    </div>
+  </div>
+
+  <!-- ⑥ 年次有給休暇 -->
+  <div class="section-panel" id="panel5">
+    <div class="section-header">
+      <div class="section-num">⑥</div>
+      <div class="section-title">年次有給休暇</div>
+    </div>
+    <div class="form-group">
+      <label>雇用形態</label>
+      <select id="employmentType" onchange="showPartTimeFields(); recalcAll(); saveAll()">
+        <option value="fulltime">正社員・フルタイム（週30時間以上 または 週5日以上）</option>
+        <option value="parttime">パート・アルバイト（短時間労働者）</option>
+      </select>
+    </div>
+    <div id="partTimeFields" style="display:none">
+      <div class="form-group">
+        <label>週所定労働日数</label>
+        <select id="partTimeDays" onchange="recalcAll(); saveAll()">
+          <option value="4">週4日</option>
+          <option value="3">週3日</option>
+          <option value="2">週2日</option>
+          <option value="1">週1日</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>時間単位年休の採用（労使協定による）</label>
+      <select id="hourlyLeave" onchange="recalcAll(); saveAll()">
+        <option value="no">なし</option>
+        <option value="yes">あり（労使協定で時間単位取得を採用）</option>
+      </select>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">6-1：法定付与日数（参考）</div><div class="check-sub">労基法 第39条 ／ 勤続年数・所定労働日数に応じた付与日数</div></div>
+        <span class="judgment j-info" id="j6-1">参考</span>
+      </div>
+      <div class="process-box" id="proc6-1">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">6-2：時間単位年休</div><div class="check-sub">労基法 第39条4項 ／ 労使協定で採用可（年5日分まで）</div></div>
+        <span class="judgment j-info" id="j6-2">参考</span>
+      </div>
+      <div class="process-box" id="proc6-2">（計算待ち）</div>
+    </div>
+  </div>
+
+  <!-- ⑦ 割増賃金 -->
+  <div class="section-panel" id="panel6">
+    <div class="section-header">
+      <div class="section-num">⑦</div>
+      <div class="section-title">割増賃金</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>時間外割増率（%）</label>
+        <input type="number" id="otRate" value="25" min="0" max="200" style="max-width:100px" oninput="recalcAll(); saveAll()">
+      </div>
+      <div class="form-group">
+        <label>深夜割増率（%）</label>
+        <input type="number" id="nightRate" value="25" min="0" max="200" style="max-width:100px" oninput="recalcAll(); saveAll()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>法定休日割増率（%）</label>
+        <input type="number" id="holidayRate" value="35" min="0" max="200" style="max-width:100px" oninput="recalcAll(); saveAll()">
+      </div>
+      <div class="form-group">
+        <label>月60時間超 時間外割増率（%）</label>
+        <input type="number" id="ot60Rate" value="50" min="0" max="200" style="max-width:100px" oninput="recalcAll(); saveAll()">
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">7-1：時間外・深夜割増率</div><div class="check-sub">労基法 第37条 ／ 時間外25%以上・深夜25%以上・時間外＋深夜50%以上</div></div>
+        <span class="judgment" id="j7-1">－</span>
+      </div>
+      <div class="process-box" id="proc7-1">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">7-2：法定休日労働の割増率</div><div class="check-sub">35%以上・休日＋深夜は60%以上</div></div>
+        <span class="judgment" id="j7-2">－</span>
+      </div>
+      <div class="process-box" id="proc7-2">（計算待ち）</div>
+    </div>
+    <div class="check-item">
+      <div class="check-header">
+        <div><div class="check-label">7-3：月60時間超の割増率</div><div class="check-sub">50%以上（2023年4月より中小企業も適用）</div></div>
+        <span class="judgment" id="j7-3">－</span>
+      </div>
+      <div class="process-box" id="proc7-3">（計算待ち）</div>
+    </div>
+  </div>
+
+  <!-- ⑧ 最低賃金 -->
+  <div class="section-panel" id="panel7">
+    <div class="section-header">
+      <div class="section-num">⑧</div>
+      <div class="section-title">最低賃金</div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>都道府県（最低賃金の自動設定）</label>
+        <select id="prefecture" onchange="onPrefectureChange(); recalcAll(); saveAll()">
+          <option value="">── 選択してください ──</option>
+          <option value="北海道">北海道（1,010円）</option>
+          <option value="青森">青森県（953円）</option>
+          <option value="岩手">岩手県（952円）</option>
+          <option value="宮城">宮城県（973円）</option>
+          <option value="秋田">秋田県（951円）</option>
+          <option value="山形">山形県（955円）</option>
+          <option value="福島">福島県（955円）</option>
+          <option value="茨城">茨城県（1,005円）</option>
+          <option value="栃木">栃木県（1,004円）</option>
+          <option value="群馬">群馬県（985円）</option>
+          <option value="埼玉">埼玉県（1,078円）</option>
+          <option value="千葉">千葉県（1,076円）</option>
+          <option value="東京">東京都（1,163円）</option>
+          <option value="神奈川">神奈川県（1,162円）</option>
+          <option value="新潟">新潟県（985円）</option>
+          <option value="富山">富山県（998円）</option>
+          <option value="石川">石川県（984円）</option>
+          <option value="福井">福井県（984円）</option>
+          <option value="山梨">山梨県（988円）</option>
+          <option value="長野">長野県（998円）</option>
+          <option value="岐阜">岐阜県（1,001円）</option>
+          <option value="静岡">静岡県（1,034円）</option>
+          <option value="愛知">愛知県（1,077円）</option>
+          <option value="三重">三重県（1,023円）</option>
+          <option value="滋賀">滋賀県（1,017円）</option>
+          <option value="京都">京都府（1,058円）</option>
+          <option value="大阪" selected>大阪府（1,177円）</option>
+          <option value="兵庫">兵庫県（1,052円）</option>
+          <option value="奈良">奈良県（986円）</option>
+          <option value="和歌山">和歌山県（980円）</option>
+          <option value="鳥取">鳥取県（957円）</option>
+          <option value="島根">島根県（962円）</option>
+          <option value="岡山">岡山県（982円）</option>
+          <option value="広島">広島県（1,020円）</option>
+          <option value="山口">山口県（979円）</option>
+          <option value="徳島">徳島県（980円）</option>
+          <option value="香川">香川県（970円）</option>
+          <option value="愛媛">愛媛県（956円）</option>
+          <option value="高知">高知県（952円）</option>
+          <option value="福岡">福岡県（992円）</option>
+          <option value="佐賀">佐賀県（956円）</option>
+          <option value="長崎">長崎県（953円）</option>
+          <option value="熊本">熊本県（952円）</option>
+          <option value="大分">大分県（954円）</option>
+          <option value="宮崎">宮崎県（952円）</option>
+          <option value="鹿児島">鹿児島県（953円）</option>
+          <option value="沖縄">沖縄県（952円）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>最低賃金（円/時間）</label>
+        <input type="number" id="minWage" value="1177" min="800" max="3000" style="max-width:110px" oninput="recalcAll(); saveAll()">
+        <div style="font-size:11px;color:#718096;margin-top:3px">都道府県選択で自動入力・手動変更可</div>
+      </div>
+    </div>
+
+    <div class="info-box">
+      ※ 掲載の最低賃金額は2024年10月改定値（大阪は2025年度値）を参照。毎年10月頃に改定されます。
+      最新の金額は<strong>厚生労働省の地域別最低賃金一覧</strong>で確認してください。<br>
+      ※ 最低賃金との比較対象は所定内賃金（基本給＋各種手当）です。通勤手当・時間外割増賃金・精勤手当等は比較対象外。
+    </div>
+
+    <div class="form-group">
+      <label>賃金の種類</label>
+      <select id="wageType" onchange="showWageFields(); recalcAll(); saveAll()">
+        <option value="monthly">月給制</option>
+        <option value="daily">日給制</option>
+        <option value="hourly">時給制</option>
+      </select>
+    </div>
+
+    <div id="wageMonthly">
+      <div class="form-group">
+        <label>月給（所定内賃金）（円）</label>
+        <input type="number" id="monthlySalary" placeholder="例: 200000" min="0" style="max-width:150px" oninput="recalcAll(); saveAll()">
+        <div style="font-size:11px;color:#718096;margin-top:3px">基本給＋固定手当の合計（通勤手当・時間外手当は除く）</div>
+      </div>
+    </div>
+    <div id="wageDaily" style="display:none">
+      <div class="form-group">
+        <label>日給（円）</label>
+        <input type="number" id="dailySalary" placeholder="例: 10000" min="0" style="max-width:150px" oninput="recalcAll(); saveAll()">
+      </div>
+    </div>
+    <div id="wageHourly" style="display:none">
+      <div class="form-group">
+        <label>時給（円）</label>
+        <input type="number" id="hourlySalary" placeholder="例: 1200" min="0" style="max-width:150px" oninput="recalcAll(); saveAll()">
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-header">
+        <div>
+          <div class="check-label">8-1：最低賃金との比較</div>
+          <div class="check-sub">最低賃金法 第4条 ／ 時間換算額 ≥ 最低賃金額</div>
+        </div>
+        <span class="judgment" id="j8-1">－</span>
+      </div>
+      <div class="process-box" id="proc8-1">（計算待ち）</div>
+    </div>
+  </div>
+
+</div><!-- /panels -->
+
+<div class="overall-wrap">
+  <div class="overall-judgment">
+    <h2>総合判定</h2>
+    <div class="judgment-counts">
+      <span style="color:#059669">○&nbsp;<span id="okCount">0</span> 件</span>
+      <span style="color:#d97706">△&nbsp;<span id="warnCount">0</span> 件</span>
+      <span style="color:#dc2626">✗&nbsp;<span id="ngCount">0</span> 件</span>
+    </div>
+    <div id="issuesSummary"></div>
+  </div>
+</div>
+
+<div class="actions no-print">
+  <button class="btn btn-print" onclick="window.print()">🖨 印刷 / PDF保存</button>
+  <button class="btn btn-reset" onclick="resetAll()">リセット</button>
+</div>
+<div style="height:40px"></div>
+
+<script>
+// ────────────────────────────────────────────────
+// 祝日データ 2025-2027（内蔵）
+// ────────────────────────────────────────────────
+const HOLIDAYS_BY_YEAR = {
+  2025: ['2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24',
+         '2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06',
+         '2025-07-21','2025-08-11','2025-09-15','2025-09-23','2025-10-13',
+         '2025-11-03','2025-11-23','2025-11-24'],
+  2026: ['2026-01-01','2026-01-12','2026-02-11','2026-02-23',
+         '2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06',
+         '2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12',
+         '2026-11-03','2026-11-23'],
+  2027: ['2027-01-01','2027-01-11','2027-02-11','2027-02-23',
+         '2027-03-21','2027-04-29','2027-05-03','2027-05-04','2027-05-05',
+         '2027-07-19','2027-08-11','2027-08-12','2027-09-20','2027-09-23','2027-10-11',
+         '2027-11-03','2027-11-23','2027-11-24']
+};
+
+let individualHolidays = []; // [{date:'YYYY-MM-DD', name:'...'}]
+
+// ────────────────────────────────────────────────
+// Time utilities
+// ────────────────────────────────────────────────
+function timeToMin(t) {
+  if (!t) return 0;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+function minToStr(m) {
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  return min === 0 ? h + '時間' : h + '時間' + min + '分';
+}
+function minToH(m) { return (m / 60).toFixed(2); }
+
+// ────────────────────────────────────────────────
+// Core calculations
+// ────────────────────────────────────────────────
+function getDailyMin() {
+  const start = timeToMin(document.getElementById('startTime').value);
+  let end = timeToMin(document.getElementById('endTime').value);
+  const brk = parseInt(document.getElementById('breakTime').value) || 0;
+  if (end < start) end += 24 * 60; // overnight
+  return Math.max(0, end - start - brk);
+}
+function getWeeklyWorkDays() {
+  let off = 0;
+  for (let i = 0; i < 7; i++) if (document.getElementById('wd' + i).checked) off++;
+  return 7 - off;
+}
+function getWeeklyOffDays() { return 7 - getWeeklyWorkDays(); }
+
+// Our wd index (0=Mon..6=Sun) → JS getDay (0=Sun..6=Sat)
+function ourToJS(d) { return d === 6 ? 0 : d + 1; }
+
+function getOffJsDays() {
+  const r = [];
+  for (let i = 0; i < 7; i++) if (document.getElementById('wd' + i).checked) r.push(ourToJS(i));
+  return r;
+}
+function countPubHolOnWorkDays(year) {
+  if (document.getElementById('holidayType').value !== 'off') return 0;
+  const list = HOLIDAYS_BY_YEAR[year] || [];
+  const offJs = getOffJsDays();
+  return list.filter(d => !offJs.includes(new Date(d + 'T00:00:00').getDay())).length;
+}
+function countIndivHolOnWorkDays(year) {
+  if (!individualHolidays.length) return 0;
+  const offJs = getOffJsDays();
+  return individualHolidays.filter(h =>
+    h.date && h.date.startsWith(String(year)) &&
+    !offJs.includes(new Date(h.date + 'T00:00:00').getDay())
+  ).length;
+}
+function getAnnualWorkDays(year) {
+  return Math.max(0, getWeeklyWorkDays() * 52 - countPubHolOnWorkDays(year) - countIndivHolOnWorkDays(year));
+}
+function getAnnualOffDays(year) {
+  return getWeeklyOffDays() * 52 + countPubHolOnWorkDays(year) + countIndivHolOnWorkDays(year);
+}
+function isSpecial() { return document.getElementById('specialMeasure').checked; }
+function weeklyLimit() { return isSpecial() ? 44 : 40; }
+
+// ────────────────────────────────────────────────
+// Helpers: set judgment + process text
+// ────────────────────────────────────────────────
+function setJ(id, status) {
+  const el = document.getElementById(id);
+  const map = { ok:['○','j-ok'], warn:['△','j-warn'], ng:['✗','j-ng'], info:['参考','j-info'] };
+  const [text, cls] = map[status] || ['－',''];
+  el.textContent = text;
+  el.className = 'judgment ' + cls;
+}
+function setP(id, text) { document.getElementById(id).textContent = text; }
+
+// ────────────────────────────────────────────────
+// Section ① 労働時間
+// ────────────────────────────────────────────────
+function calcS1() {
+  const dm = getDailyMin();
+  const wdays = getWeeklyWorkDays();
+  const wMin = dm * wdays;
+  const wLim = weeklyLimit();
+  const brk = parseInt(document.getElementById('breakTime').value) || 0;
+  const st = document.getElementById('startTime').value;
+  const et = document.getElementById('endTime').value;
+  const year = new Date().getFullYear();
+  const awd = getAnnualWorkDays(year);
+  const pubHol = countPubHolOnWorkDays(year);
+  const indHol = countIndivHolOnWorkDays(year);
+  const dnames = ['月','火','水','木','金','土','日'];
+  const offIdx = [];
+  for (let i = 0; i < 7; i++) if (document.getElementById('wd'+i).checked) offIdx.push(i);
+  const workStr = dnames.filter((_,i)=>!offIdx.includes(i)).join('・') || 'なし';
+  const offStr  = offIdx.length ? offIdx.map(i=>dnames[i]).join('・') : 'なし';
+  const holLabel = document.getElementById('holidayType').value === 'off' ? '休日扱い' : '出勤日';
+
+  const j11 = dm/60 <= 8 ? 'ok' : 'ng';
+  setJ('j1-1', j11);
+  setP('proc1-1',
+    '始業: ' + st + '  終業: ' + et + '  休憩: ' + brk + '分\n' +
+    '計算式: (' + et + ' − ' + st + ') − ' + brk + '分 = ' + dm + '分 = ' + minToStr(dm) + '\n' +
+    '法定基準: 8時間以内（労基法 第32条2項）\n' +
+    '判  定: ' + (j11==='ok' ? '○ 法定基準内' : '✗ 8時間超過 → 時間外労働となるため36協定が必要'));
+
+  const j12 = wMin/60 <= wLim ? 'ok' : 'ng';
+  setJ('j1-2', j12);
+  setP('proc1-2',
+    '就業日: ' + workStr + '（週' + wdays + '日）  休日: ' + offStr + '（週' + (7-wdays) + '日）\n' +
+    '計算式: ' + minToH(dm) + '時間/日 × 週' + wdays + '日 = ' + minToH(wMin) + '時間/週\n' +
+    '法定基準: ' + wLim + '時間以内' + (isSpecial() ? '（特例措置適用中: 44時間）' : '') + '（労基法 第32条1項' + (isSpecial() ? '、第40条' : '') + '）\n' +
+    '判  定: ' + (j12==='ok' ? '○ 法定基準内' : '✗ ' + wLim + '時間超過'));
+
+  setJ('j1-3', 'info');
+  setP('proc1-3',
+    '週' + wdays + '日 × 52週 = ' + (wdays*52) + '日（基準）\n' +
+    (pubHol > 0
+      ? '  − 祝日（就業日に当たる分）: ' + pubHol + '日  ← 祝日は' + holLabel + '\n'
+      : '  祝日: ' + holLabel + 'のため週休のみで計算\n') +
+    (indHol > 0 ? '  − 個別休日（就業日に当たる分）: ' + indHol + '日\n' : '') +
+    '= 推定年間就業日数: ' + awd + '日\n' +
+    '年間総労働時間（推定）: ' + awd + '日 × ' + minToH(dm) + '時間 = ' + (dm * awd / 60).toFixed(1) + '時間');
+
+  return { '1-1': j11, '1-2': j12 };
+}
+
+// ────────────────────────────────────────────────
+// Section ② 時間外・休日労働
+// ────────────────────────────────────────────────
+function calcS2() {
+  const agr = document.getElementById('s36agreement').value;
+  document.getElementById('s36details').style.display = agr !== 'none' ? 'block' : 'none';
+  const sc = document.getElementById('specialClause').value;
+  document.getElementById('specialClauseDetails').style.display =
+    (agr !== 'none' && sc === 'yes') ? 'block' : 'none';
+
+  let j21, p21;
+  if (agr === 'none')       { j21='ok'; p21='時間外・休日労働はさせない → 36協定の締結・届出は不要\n判定: ○'; }
+  else if (agr === 'filed') { j21='ok'; p21='36協定: 有・届出済\n判定: ○'; }
+  else                      { j21='ng'; p21='36協定: 有・未届出\n時間外・休日労働をさせるためには、36協定を締結し所轄労働基準監督署へ届け出ることが必要です。\n判定: ✗'; }
+  setJ('j2-1', j21); setP('proc2-1', p21);
+
+  let j22, p22;
+  if (agr === 'none') { j22='ok'; p22='時間外・休日労働なし → 該当なし\n判定: ○'; }
+  else {
+    const mOT = parseFloat(document.getElementById('monthlyOT').value) || 0;
+    const aOT = parseFloat(document.getElementById('annualOT').value) || 0;
+    j22 = mOT<=45 && aOT<=360 ? 'ok' : 'ng';
+    p22 = '月間時間外上限: ' + mOT + '時間  法定上限: 45時間以内 → ' + (mOT<=45?'○':'✗') + '\n' +
+          '年間時間外上限: ' + aOT + '時間  法定上限: 360時間以内 → ' + (aOT<=360?'○':'✗') + '\n' +
+          '判  定: ' + (j22==='ok' ? '○ 法定基準内' : '✗ 上限超過');
+  }
+  setJ('j2-2', j22); setP('proc2-2', p22);
+
+  let j23, p23;
+  if (agr === 'none' || sc === 'none') {
+    j23='ok';
+    p23 = agr==='none' ? '時間外・休日労働なし → 該当なし\n判定: ○' : '特別条項なし → 該当なし\n判定: ○';
+  } else {
+    const sm = parseFloat(document.getElementById('specialMonthlyOT').value) || 0;
+    const sa = parseFloat(document.getElementById('specialAnnualOT').value) || 0;
+    j23 = sm<100 && sa<=720 ? 'ok' : 'ng';
+    p23 = '特別条項 月間上限: ' + sm + '時間  法定上限: 100時間未満 → ' + (sm<100?'○':'✗') + '\n' +
+          '特別条項 年間上限: ' + sa + '時間  法定上限: 720時間以内 → ' + (sa<=720?'○':'✗') + '\n' +
+          '※ その他: 複数月（2〜6ヶ月）平均80時間以内・年6回以内の制限あり\n' +
+          '判  定: ' + (j23==='ok' ? '○ 法定基準内' : '✗ 上限超過');
+  }
+  setJ('j2-3', j23); setP('proc2-3', p23);
+  return { '2-1': j21, '2-2': j22, '2-3': j23 };
+}
+
+// ────────────────────────────────────────────────
+// Section ③ 休憩
+// ────────────────────────────────────────────────
+function calcS3() {
+  const dm  = getDailyMin();
+  const brk = parseInt(document.getElementById('breakTime').value) || 0;
+  const exc = document.getElementById('breakException').value;
+  let req = 0;
+  if (dm > 480) req = 60;
+  else if (dm > 360) req = 45;
+
+  const j31 = brk >= req ? 'ok' : 'ng';
+  setJ('j3-1', j31);
+  setP('proc3-1', req === 0
+    ? '1日の労働時間: ' + minToStr(dm) + '（6時間以下）\n→ 法律上の休憩付与義務なし\n判定: ○'
+    : '1日の労働時間: ' + minToStr(dm) + '\n→ ' + (dm>480 ? '8時間超 → 60分以上' : '6時間超8時間以下 → 45分以上') + 'の休憩が必要（労基法 第34条1項）\n設定休憩: ' + brk + '分  必要休憩: ' + req + '分\n判  定: ' + (j31==='ok' ? '○ 基準内' : '✗ 休憩時間不足（' + req + '分以上必要）'));
+
+  setJ('j3-2', 'ok');
+  setP('proc3-2',
+    '一斉付与の適用除外（労使協定）: ' + (exc==='yes' ? 'あり' : 'なし') + '\n' +
+    (exc==='yes'
+      ? '労使協定あり → 一斉付与の適用除外として問題なし\n判定: ○'
+      : '一斉付与が原則（労基法 第34条2項）\n例外業種（運輸・商業・飲食等）は適用除外\n判定: ○（対象業種を個別確認推奨）'));
+  return { '3-1': j31, '3-2': 'ok' };
+}
+
+// ────────────────────────────────────────────────
+// Section ④ 休日
+// ────────────────────────────────────────────────
+function calcS4() {
+  const offDays = getWeeklyOffDays();
+  const year = new Date().getFullYear();
+  const annOff = getAnnualOffDays(year);
+  const pubHol = countPubHolOnWorkDays(year);
+  const indHol = countIndivHolOnWorkDays(year);
+  const holType = document.getElementById('holidayType').value;
+  const dnames = ['月','火','水','木','金','土','日'];
+  const offIdx = [];
+  for (let i=0;i<7;i++) if(document.getElementById('wd'+i).checked) offIdx.push(i);
+  const offStr = offIdx.length ? offIdx.map(i=>dnames[i]).join('・') : 'なし';
+
+  const j41 = offDays >= 1 ? 'ok' : 'ng';
+  setJ('j4-1', j41);
+  setP('proc4-1',
+    '週の所定休日: ' + offStr + '（' + offDays + '日/週）\n' +
+    '法定基準: 週1回以上の休日（労基法 第35条1項）\n' +
+    '判  定: ' + (j41==='ok' ? '○ 基準内' : '✗ 週の法定休日が確保されていません'));
+
+  const j42 = annOff>=105 ? 'ok' : (annOff>=52 ? 'warn' : 'ng');
+  setJ('j4-2', j42);
+  setP('proc4-2',
+    '週休: ' + offDays + '日/週 × 52週 = ' + (offDays*52) + '日\n' +
+    (holType==='off' && pubHol>0 ? '祝日（就業日に当たる分）: ' + pubHol + '日\n' :
+      holType==='work' ? '祝日: 出勤日扱い（加算なし）\n' : '') +
+    (indHol>0 ? '個別休日（就業日に当たる分）: ' + indHol + '日\n' : '') +
+    '= 年間休日合計（推定）: ' + annOff + '日\n' +
+    '参考基準: 105日以上が一般的目安\n' +
+    '判  定: ' + (j42==='ok' ? '○ 105日以上' : j42==='warn' ? '△ 105日未満（内容確認推奨）' : '✗ 法定週休分が不足'));
+
+  const hRate = parseFloat(document.getElementById('holidayRate').value) || 0;
+  const j43 = hRate >= 35 ? 'ok' : 'ng';
+  setJ('j4-3', j43);
+  setP('proc4-3',
+    '法定休日労働の割増率: ' + hRate + '%\n' +
+    '法定基準: 35%以上（労基法 第37条1項）\n' +
+    '判  定: ' + (j43==='ok' ? '○ 基準内' : '✗ 35%未満') + '（⑦ 割増賃金の設定値と連動）');
+
+  return { '4-1': j41, '4-2': j42, '4-3': j43 };
+}
+
+// ────────────────────────────────────────────────
+// Section ⑤ 変形労働時間制
+// ────────────────────────────────────────────────
+function calcS5() {
+  const ft = document.getElementById('flexType').value;
+  const wLim = weeklyLimit();
+  let j51, p51, j52, p52, j53, p53;
+
+  if (ft === 'none') {
+    j51='ok'; p51='変形労働時間制は採用しない → 通常の労働時間制度\n判定: ○';
+    j52='ok'; p52='変形労働時間制は採用しない → 該当なし\n判定: ○';
+    j53='ok'; p53='変形労働時間制は採用しない → 該当なし\n判定: ○';
+
+  } else if (ft === 'monthly') {
+    const agr = document.getElementById('flexMonthlyAgreement').value;
+    const rep = document.getElementById('flexMonthlyReport').value;
+    j51 = (agr==='yes' && rep==='yes') ? 'ok' : 'ng';
+    p51 = '1ヶ月単位の変形労働時間制\n' +
+          '就業規則/労使協定: ' + (agr==='yes'?'有・対応済 ○':'なし ✗') + '\n' +
+          '労働基準監督署 届出: ' + (rep==='yes'?'届出済 ○':'未届出 ✗') + '\n' +
+          '判  定: ' + (j51==='ok' ? '○' : '✗ 書類整備・届出が必要');
+
+    const total = parseFloat(document.getElementById('flexMonthlyTotal').value) || 0;
+    const maxH = (wLim * 4.348).toFixed(1);
+    j52 = total>0 && total<=parseFloat(maxH) ? 'ok' : (total===0 ? 'warn' : 'ng');
+    p52 = '1ヶ月の総所定労働時間: ' + (total>0?total+'時間':'未入力') + '\n' +
+          '法定上限（目安）: 週' + wLim + '時間 × 4.348週 ≒ ' + maxH + '時間\n' +
+          '判  定: ' + (j52==='ok'?'○ 基準内':j52==='warn'?'△ 時間を入力してください':'✗ 上限超過の可能性');
+
+    j53='ok'; p53='各週の就業時間を就業規則に定め、月平均で週' + wLim + '時間以内を管理\n判定: ○（就業規則・労使協定の内容に基づき確認）';
+
+  } else if (ft === 'annual') {
+    const agr = document.getElementById('flexAnnualAgreement').value;
+    j51 = agr==='yes' ? 'ok' : 'ng';
+    p51 = '1年単位の変形労働時間制\n' +
+          '労使協定（届出必須）: ' + (agr==='yes'?'有・届出済 ○':'なし / 未届出 ✗') + '\n' +
+          '判  定: ' + (j51==='ok' ? '○' : '✗ 労使協定の締結・届出が必要');
+
+    const md = parseFloat(document.getElementById('flexAnnualMaxDay').value) || 0;
+    const mw = parseFloat(document.getElementById('flexAnnualMaxWeek').value) || 0;
+    const mdOK = md===0 || md<=10, mwOK = mw===0 || mw<=52;
+    j52 = (mdOK && mwOK) ? 'ok' : 'ng';
+    p52 = '1日の最長労働時間: ' + (md>0?md+'時間':'未入力') + '  法定上限: 10時間 → ' + (mdOK?'○（または未設定）':'✗ 10時間超過') + '\n' +
+          '週の最長労働時間: ' + (mw>0?mw+'時間':'未入力') + '  法定上限: 52時間 → ' + (mwOK?'○（または未設定）':'✗ 52時間超過') + '\n' +
+          '判  定: ' + (j52==='ok'?'○':'✗ 上限超過');
+
+    j53='ok'; p53='1年単位変形制の平均週労働時間: 40時間以内（特例措置の適用なし）\n連続労働日数: 6日以内（特定期間は連続12日まで可）\n判定: ○（就業カレンダーに基づき管理）';
+
+  } else {
+    const period = parseInt(document.getElementById('flexFlexPeriod').value) || 1;
+    const total = parseFloat(document.getElementById('flexFlexTotal').value) || 0;
+    j51='ok'; p51='フレックスタイム制\n清算期間1ヶ月以内: 就業規則に規定（届出不要）\n清算期間1ヶ月超: 労使協定の締結・届出が必要\n判定: ○（規定内容を確認）';
+
+    const legalMax = (40 * period * 30 / 7).toFixed(1);
+    j52 = total>0 && total<=parseFloat(legalMax) ? 'ok' : (total===0 ? 'warn' : 'ng');
+    p52 = '清算期間: ' + period + 'ヶ月\n' +
+          '清算期間の総所定労働時間: ' + (total>0?total+'時間':'未入力') + '\n' +
+          '法定上限（目安）: 40時間 × (' + period + 'ヶ月×30日÷7) ≒ ' + legalMax + '時間\n' +
+          '判  定: ' + (j52==='ok'?'○ 基準内':j52==='warn'?'△ 時間を入力してください':'✗ 上限超過の可能性');
+
+    j53='ok'; p53='フレックスタイム制では1日・週の上限は設定不要\n清算期間内の総労働時間を基準に管理します\n判定: ○';
+  }
+
+  setJ('j5-1',j51); setP('proc5-1',p51);
+  setJ('j5-2',j52); setP('proc5-2',p52);
+  setJ('j5-3',j53); setP('proc5-3',p53);
+  return { '5-1': j51, '5-2': j52, '5-3': j53 };
+}
+
+// ────────────────────────────────────────────────
+// Section ⑥ 年次有給休暇
+// ────────────────────────────────────────────────
+function calcS6() {
+  const emp = document.getElementById('employmentType').value;
+  const hlv = document.getElementById('hourlyLeave').value;
+  const full = [['6ヶ月',10],['1年6ヶ月',11],['2年6ヶ月',12],['3年6ヶ月',14],['4年6ヶ月',16],['5年6ヶ月',18],['6年6ヶ月以上',20]];
+  const part = {
+    4:[['6ヶ月',7],['1年6ヶ月',8],['2年6ヶ月',9],['3年6ヶ月',10],['4年6ヶ月',12],['5年6ヶ月',13],['6年6ヶ月以上',15]],
+    3:[['6ヶ月',5],['1年6ヶ月',6],['2年6ヶ月',6],['3年6ヶ月',8],['4年6ヶ月',9],['5年6ヶ月',10],['6年6ヶ月以上',11]],
+    2:[['6ヶ月',3],['1年6ヶ月',4],['2年6ヶ月',4],['3年6ヶ月',5],['4年6ヶ月',6],['5年6ヶ月',6],['6年6ヶ月以上',7]],
+    1:[['6ヶ月',1],['1年6ヶ月',2],['2年6ヶ月',2],['3年6ヶ月',2],['4年6ヶ月',3],['5年6ヶ月',3],['6年6ヶ月以上',3]]
+  };
+  const pd = parseInt(document.getElementById('partTimeDays').value) || 4;
+  const tbl = emp==='fulltime' ? full : part[pd];
+
+  let tblStr = (emp==='fulltime' ? '【正社員・フルタイム】法定付与日数' : '【パート・アルバイト 週'+pd+'日】法定付与日数') + '\n';
+  tblStr += '─────────────────────\n勤続期間        │ 法定付与日数\n─────────────────────\n';
+  for (const [label, days] of tbl) tblStr += label.padEnd(14) + '│ ' + days + '日\n';
+
+  setJ('j6-1', 'info'); setP('proc6-1', tblStr);
+  setJ('j6-2', 'info');
+  setP('proc6-2',
+    '時間単位年休の採用: ' + (hlv==='yes'?'あり（労使協定あり）':'なし') + '\n' +
+    (hlv==='yes'
+      ? '労使協定により時間単位での有給取得が可能（年5日分まで）\n→ 求職者へのアピールポイントとして求人票に記載可能'
+      : '時間単位年休なし（半日単位取得は就業規則で設けることが可能）'));
+  return { '6-1': 'info', '6-2': 'info' };
+}
+
+// ────────────────────────────────────────────────
+// Section ⑦ 割増賃金
+// ────────────────────────────────────────────────
+function calcS7() {
+  const ot   = parseFloat(document.getElementById('otRate').value) || 0;
+  const ngt  = parseFloat(document.getElementById('nightRate').value) || 0;
+  const hol  = parseFloat(document.getElementById('holidayRate').value) || 0;
+  const ot60 = parseFloat(document.getElementById('ot60Rate').value) || 0;
+
+  const j71 = (ot>=25 && ngt>=25 && ot+ngt>=50) ? 'ok' : 'ng';
+  setJ('j7-1', j71);
+  setP('proc7-1',
+    '時間外割増率:   ' + ot + '%  法定最低: 25%以上 → ' + (ot>=25?'○':'✗') + '\n' +
+    '深夜割増率:     ' + ngt + '%  法定最低: 25%以上 → ' + (ngt>=25?'○':'✗') + '\n' +
+    '時間外＋深夜:   ' + (ot+ngt) + '%  法定最低: 50%以上 → ' + (ot+ngt>=50?'○':'✗') + '\n' +
+    '判  定: ' + (j71==='ok'?'○ 基準内':'✗ 割増率不足') + '（労基法 第37条）');
+
+  const j72 = (hol>=35 && hol+ngt>=60) ? 'ok' : 'ng';
+  setJ('j7-2', j72);
+  setP('proc7-2',
+    '法定休日割増率: ' + hol + '%  法定最低: 35%以上 → ' + (hol>=35?'○':'✗') + '\n' +
+    '休日＋深夜割増: ' + (hol+ngt) + '%  法定最低: 60%以上 → ' + (hol+ngt>=60?'○':'✗') + '\n' +
+    '判  定: ' + (j72==='ok'?'○ 基準内':'✗ 割増率不足') + '（労基法 第37条）');
+
+  const j73 = ot60>=50 ? 'ok' : 'ng';
+  setJ('j7-3', j73);
+  setP('proc7-3',
+    '月60時間超 時間外割増率: ' + ot60 + '%  法定最低: 50%以上 → ' + (ot60>=50?'○':'✗') + '\n' +
+    '※ 2023年4月施行: 中小企業にも50%以上が義務化されました（労基法 第37条1項ただし書き）\n' +
+    '判  定: ' + (j73==='ok'?'○ 基準内':'✗ 50%未満'));
+  return { '7-1': j71, '7-2': j72, '7-3': j73 };
+}
+
+// ────────────────────────────────────────────────
+// Overall judgment + tab badges (DOM-safe, no innerHTML with user data)
+// ────────────────────────────────────────────────
+const ITEM_LABELS = {
+  '1-1':'①-1 1日の所定労働時間',  '1-2':'①-2 週の所定労働時間',
+  '2-1':'②-1 36協定の締結・届出', '2-2':'②-2 時間外労働の上限（通常）',
+  '2-3':'②-3 時間外労働の上限（特別条項）',
+  '3-1':'③-1 休憩時間の長さ',     '4-1':'④-1 法定休日（週1日以上）',
+  '4-2':'④-2 年間休日日数',       '4-3':'④-3 休日労働割増賃金',
+  '5-1':'⑤-1 書類整備',           '5-2':'⑤-2 1日・週の上限時間',
+  '7-1':'⑦-1 時間外・深夜割増率', '7-2':'⑦-2 休日労働割増率',
+  '7-3':'⑦-3 月60時間超割増率',   '8-1':'⑧-1 最低賃金との比較'
+};
+const SECTION_KEYS = [
+  ['1-1','1-2'],['2-1','2-2','2-3'],['3-1','3-2'],
+  ['4-1','4-2','4-3'],['5-1','5-2','5-3'],['6-1','6-2'],['7-1','7-2','7-3'],['8-1']
+];
+
+function updateOverall(results) {
+  let ok=0, warn=0, ng=0;
+  const issues = [];
+  for (const [k,v] of Object.entries(results)) {
+    if (v==='ok' || v==='info') ok++;
+    else if (v==='warn') { warn++; if(ITEM_LABELS[k]) issues.push({type:'warn', label:ITEM_LABELS[k]}); }
+    else if (v==='ng')   { ng++;   if(ITEM_LABELS[k]) issues.push({type:'ng',   label:ITEM_LABELS[k]}); }
+  }
+  document.getElementById('okCount').textContent   = ok;
+  document.getElementById('warnCount').textContent = warn;
+  document.getElementById('ngCount').textContent   = ng;
+
+  const el = document.getElementById('issuesSummary');
+  while (el.firstChild) el.removeChild(el.firstChild);
+
+  if (!issues.length) {
+    const p = document.createElement('p');
+    p.className = 'all-ok-msg';
+    p.textContent = '✓ チェック対象の全項目が法定基準を満たしています';
+    el.appendChild(p);
+  } else {
+    const title = document.createElement('p');
+    title.style.cssText = 'font-weight:bold;margin-bottom:8px;color:#374151';
+    title.textContent = '要確認・修正事項:';
+    el.appendChild(title);
+
+    const ul = document.createElement('ul');
+    ul.className = 'issues-list';
+    for (const issue of issues) {
+      const li = document.createElement('li');
+      const marker = document.createElement('span');
+      marker.className = 'issue-marker-' + issue.type;
+      marker.textContent = issue.type === 'ng' ? '✗' : '△';
+      li.appendChild(marker);
+      const text = document.createTextNode(issue.label);
+      li.appendChild(text);
+      ul.appendChild(li);
+    }
+    el.appendChild(ul);
+
+    if (warn > 0) {
+      const note = document.createElement('p');
+      note.className = 'warn-note';
+      note.textContent = '△ 注意項目は個別に内容を確認してください';
+      el.appendChild(note);
+    }
+  }
+
+  // tab badges
+  SECTION_KEYS.forEach((keys, i) => {
+    const vals = keys.map(k => results[k] || 'ok');
+    const status = vals.some(v=>v==='ng') ? 'ng' : vals.some(v=>v==='warn') ? 'warn' : 'ok';
+    const badge = document.getElementById('badge' + i);
+    badge.textContent = status==='ok' ? '○' : status==='warn' ? '△' : '✗';
+    badge.className = 'badge badge-' + status;
+  });
+}
+
+// ────────────────────────────────────────────────
+// Prefecture minimum wage map
+// ────────────────────────────────────────────────
+const PREF_MIN_WAGE = {
+  '北海道':1010,'青森':953,'岩手':952,'宮城':973,'秋田':951,'山形':955,'福島':955,
+  '茨城':1005,'栃木':1004,'群馬':985,'埼玉':1078,'千葉':1076,'東京':1163,'神奈川':1162,
+  '新潟':985,'富山':998,'石川':984,'福井':984,'山梨':988,'長野':998,'岐阜':1001,
+  '静岡':1034,'愛知':1077,'三重':1023,'滋賀':1017,'京都':1058,'大阪':1177,'兵庫':1052,
+  '奈良':986,'和歌山':980,'鳥取':957,'島根':962,'岡山':982,'広島':1020,'山口':979,
+  '徳島':980,'香川':970,'愛媛':956,'高知':952,'福岡':992,'佐賀':956,'長崎':953,
+  '熊本':952,'大分':954,'宮崎':952,'鹿児島':953,'沖縄':952
+};
+
+function onPrefectureChange() {
+  const pref = document.getElementById('prefecture').value;
+  if (pref && PREF_MIN_WAGE[pref]) {
+    document.getElementById('minWage').value = PREF_MIN_WAGE[pref];
+  }
+}
+
+// ────────────────────────────────────────────────
+// Section ⑧ 最低賃金
+// ────────────────────────────────────────────────
+function calcS8() {
+  const minWage = parseFloat(document.getElementById('minWage').value) || 0;
+  const wageType = document.getElementById('wageType').value;
+  const dm = getDailyMin();       // daily working minutes
+  const dailyH = dm / 60;        // daily hours (decimal)
+  const wdays = getWeeklyWorkDays();
+  const monthlyH = dailyH * wdays * 52 / 12; // monthly working hours
+  const pref = document.getElementById('prefecture').value || '（未選択）';
+
+  if (minWage <= 0) {
+    setJ('j8-1', 'warn');
+    setP('proc8-1', '最低賃金が入力されていません。都道府県を選択するか手動で入力してください。\n判定: △');
+    return { '8-1': 'warn' };
+  }
+
+  let hourlyRate = 0, inputLabel = '', calcDetail = '';
+
+  if (wageType === 'monthly') {
+    const monthly = parseFloat(document.getElementById('monthlySalary').value) || 0;
+    if (monthly <= 0) {
+      setJ('j8-1', 'warn');
+      setP('proc8-1', '月給が入力されていません。\n判定: △');
+      return { '8-1': 'warn' };
+    }
+    hourlyRate = monthly / monthlyH;
+    inputLabel = '月給: ' + monthly.toLocaleString() + '円';
+    calcDetail =
+      '【月の所定労働時間の計算】\n' +
+      '  1日の所定労働時間: ' + dailyH.toFixed(2) + '時間\n' +
+      '  週の就業日数:      ' + wdays + '日\n' +
+      '  計算式: ' + dailyH.toFixed(2) + '時間 × ' + wdays + '日 × 52週 ÷ 12ヶ月\n' +
+      '         = ' + monthlyH.toFixed(2) + '時間/月\n\n' +
+      '【時間換算額の計算】\n' +
+      '  ' + monthly.toLocaleString() + '円 ÷ ' + monthlyH.toFixed(2) + '時間\n' +
+      '  = ' + hourlyRate.toFixed(2) + '円/時間';
+
+  } else if (wageType === 'daily') {
+    const daily = parseFloat(document.getElementById('dailySalary').value) || 0;
+    if (daily <= 0) {
+      setJ('j8-1', 'warn');
+      setP('proc8-1', '日給が入力されていません。\n判定: △');
+      return { '8-1': 'warn' };
+    }
+    if (dailyH <= 0) {
+      setJ('j8-1', 'warn');
+      setP('proc8-1', '① 労働時間タブで始業・終業・休憩を先に設定してください。\n判定: △');
+      return { '8-1': 'warn' };
+    }
+    hourlyRate = daily / dailyH;
+    inputLabel = '日給: ' + daily.toLocaleString() + '円';
+    calcDetail =
+      '【時間換算額の計算】\n' +
+      '  1日の所定労働時間: ' + dailyH.toFixed(2) + '時間\n' +
+      '  ' + daily.toLocaleString() + '円 ÷ ' + dailyH.toFixed(2) + '時間\n' +
+      '  = ' + hourlyRate.toFixed(2) + '円/時間';
+
+  } else {
+    const hourly = parseFloat(document.getElementById('hourlySalary').value) || 0;
+    if (hourly <= 0) {
+      setJ('j8-1', 'warn');
+      setP('proc8-1', '時給が入力されていません。\n判定: △');
+      return { '8-1': 'warn' };
+    }
+    hourlyRate = hourly;
+    inputLabel = '時給: ' + hourly.toLocaleString() + '円';
+    calcDetail = '時給制のため換算不要\n時間換算額: ' + hourlyRate.toFixed(2) + '円/時間';
+  }
+
+  const diff = hourlyRate - minWage;
+  const j81 = hourlyRate >= minWage ? 'ok' : 'ng';
+  setJ('j8-1', j81);
+  setP('proc8-1',
+    '適用最低賃金: ' + pref + ' ' + minWage.toLocaleString() + '円/時間\n' +
+    inputLabel + '\n\n' +
+    calcDetail + '\n\n' +
+    '【最低賃金との比較】\n' +
+    '  時間換算額: ' + hourlyRate.toFixed(2) + '円/時間\n' +
+    '  最低賃金:   ' + minWage.toLocaleString() + '円/時間\n' +
+    '  差額:       ' + (diff >= 0 ? '+' : '') + diff.toFixed(2) + '円/時間\n' +
+    '判  定: ' + (j81==='ok'
+      ? '○ 最低賃金以上'
+      : '✗ 最低賃金未満（' + Math.abs(diff).toFixed(2) + '円/時間 不足）'));
+
+  return { '8-1': j81 };
+}
+
+function recalcAll() {
+  const r = {};
+  Object.assign(r, calcS1(), calcS2(), calcS3(), calcS4(), calcS5(), calcS6(), calcS7(), calcS8());
+  updateOverall(r);
+}
+
+// ────────────────────────────────────────────────
+// Tab management
+// ────────────────────────────────────────────────
+function showTab(idx) {
+  document.querySelectorAll('.section-panel').forEach((el,i) => el.classList.toggle('active', i===idx));
+  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', i===idx));
+}
+
+// ────────────────────────────────────────────────
+// UI visibility helpers
+// ────────────────────────────────────────────────
+function showFlexDetails() {
+  const ft = document.getElementById('flexType').value;
+  document.getElementById('flexMonthly').style.display = ft==='monthly' ? 'block' : 'none';
+  document.getElementById('flexAnnual').style.display  = ft==='annual'  ? 'block' : 'none';
+  document.getElementById('flexFlex').style.display    = ft==='flex'    ? 'block' : 'none';
+}
+function showPartTimeFields() {
+  document.getElementById('partTimeFields').style.display =
+    document.getElementById('employmentType').value === 'parttime' ? 'block' : 'none';
+}
+function showWageFields() {
+  const wt = document.getElementById('wageType').value;
+  document.getElementById('wageMonthly').style.display = wt==='monthly' ? 'block' : 'none';
+  document.getElementById('wageDaily').style.display   = wt==='daily'   ? 'block' : 'none';
+  document.getElementById('wageHourly').style.display  = wt==='hourly'  ? 'block' : 'none';
+}
+function updateWeekdayStyle() {
+  for (let i=0;i<7;i++)
+    document.getElementById('wdLabel'+i).classList.toggle('is-holiday', document.getElementById('wd'+i).checked);
+}
+
+// ────────────────────────────────────────────────
+// Individual holidays – uses DOM API (no innerHTML with user data)
+// ────────────────────────────────────────────────
+function addIndividualHoliday() {
+  const date = document.getElementById('newHolidayDate').value;
+  const name = document.getElementById('newHolidayName').value.trim() || '休日';
+  if (!date) { alert('日付を入力してください'); return; }
+  if (individualHolidays.some(h => h.date === date)) { alert('この日付は既に追加されています'); return; }
+  individualHolidays.push({ date, name });
+  individualHolidays.sort((a,b) => a.date.localeCompare(b.date));
+  document.getElementById('newHolidayDate').value = '';
+  document.getElementById('newHolidayName').value = '';
+  renderIndividualHolidays();
+  recalcAll(); saveAll();
+}
+function removeIndividualHoliday(idx) {
+  individualHolidays.splice(idx, 1);
+  renderIndividualHolidays();
+  recalcAll(); saveAll();
+}
+function renderIndividualHolidays() {
+  const list = document.getElementById('individualHolidayList');
+  while (list.firstChild) list.removeChild(list.firstChild);
+  individualHolidays.forEach((h, i) => {
+    const li   = document.createElement('li');
+    const date = document.createElement('span');
+    date.textContent = h.date;
+    const nameSp = document.createElement('span');
+    nameSp.textContent = h.name;
+    const btn = document.createElement('span');
+    btn.className = 'remove-btn no-print';
+    btn.textContent = '✕';
+    btn.onclick = () => removeIndividualHoliday(i);
+    li.appendChild(date);
+    li.appendChild(nameSp);
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+
+// ────────────────────────────────────────────────
+// LocalStorage
+// ────────────────────────────────────────────────
+const LS_KEY = 'hwLaborChecker_v1';
+function gv(id) { return document.getElementById(id).value; }
+function gc(id) { return document.getElementById(id).checked; }
+function sv(id,v) { if (v !== undefined && v !== null) document.getElementById(id).value = v; }
+function sc(id,v) { if (v !== undefined && v !== null) document.getElementById(id).checked = v; }
+
+function saveAll() {
+  const d = {
+    businessName:gv('businessName'), checkDate:gv('checkDate'), specialMeasure:gc('specialMeasure'),
+    startTime:gv('startTime'), endTime:gv('endTime'), breakTime:gv('breakTime'),
+    s36agreement:gv('s36agreement'), monthlyOT:gv('monthlyOT'), annualOT:gv('annualOT'),
+    specialClause:gv('specialClause'), specialMonthlyOT:gv('specialMonthlyOT'), specialAnnualOT:gv('specialAnnualOT'),
+    breakException:gv('breakException'),
+    weekdays: Array.from({length:7}, (_,i) => gc('wd'+i)),
+    holidayType:gv('holidayType'), individualHolidays,
+    flexType:gv('flexType'),
+    flexMonthlyAgreement:gv('flexMonthlyAgreement'), flexMonthlyReport:gv('flexMonthlyReport'), flexMonthlyTotal:gv('flexMonthlyTotal'),
+    flexAnnualAgreement:gv('flexAnnualAgreement'), flexAnnualMaxDay:gv('flexAnnualMaxDay'), flexAnnualMaxWeek:gv('flexAnnualMaxWeek'),
+    flexFlexPeriod:gv('flexFlexPeriod'), flexFlexTotal:gv('flexFlexTotal'),
+    employmentType:gv('employmentType'), partTimeDays:gv('partTimeDays'), hourlyLeave:gv('hourlyLeave'),
+    otRate:gv('otRate'), nightRate:gv('nightRate'), holidayRate:gv('holidayRate'), ot60Rate:gv('ot60Rate'),
+    prefecture:gv('prefecture'), minWage:gv('minWage'),
+    wageType:gv('wageType'), monthlySalary:gv('monthlySalary'), dailySalary:gv('dailySalary'), hourlySalary:gv('hourlySalary')
+  };
+  try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch(e) {}
+}
+
+function loadAll() {
+  let d;
+  try { d = JSON.parse(localStorage.getItem(LS_KEY)); } catch(e) { return; }
+  if (!d) return;
+  sv('businessName',d.businessName); sv('checkDate',d.checkDate); sc('specialMeasure',d.specialMeasure);
+  sv('startTime',d.startTime); sv('endTime',d.endTime); sv('breakTime',d.breakTime);
+  sv('s36agreement',d.s36agreement); sv('monthlyOT',d.monthlyOT); sv('annualOT',d.annualOT);
+  sv('specialClause',d.specialClause); sv('specialMonthlyOT',d.specialMonthlyOT); sv('specialAnnualOT',d.specialAnnualOT);
+  sv('breakException',d.breakException);
+  if (Array.isArray(d.weekdays)) d.weekdays.forEach((v,i) => sc('wd'+i, v));
+  sv('holidayType',d.holidayType);
+  if (Array.isArray(d.individualHolidays)) { individualHolidays = d.individualHolidays; renderIndividualHolidays(); }
+  sv('flexType',d.flexType);
+  sv('flexMonthlyAgreement',d.flexMonthlyAgreement); sv('flexMonthlyReport',d.flexMonthlyReport); sv('flexMonthlyTotal',d.flexMonthlyTotal);
+  sv('flexAnnualAgreement',d.flexAnnualAgreement); sv('flexAnnualMaxDay',d.flexAnnualMaxDay); sv('flexAnnualMaxWeek',d.flexAnnualMaxWeek);
+  sv('flexFlexPeriod',d.flexFlexPeriod); sv('flexFlexTotal',d.flexFlexTotal);
+  sv('employmentType',d.employmentType); sv('partTimeDays',d.partTimeDays); sv('hourlyLeave',d.hourlyLeave);
+  sv('otRate',d.otRate); sv('nightRate',d.nightRate); sv('holidayRate',d.holidayRate); sv('ot60Rate',d.ot60Rate);
+  sv('prefecture',d.prefecture); sv('minWage',d.minWage);
+  sv('wageType',d.wageType); sv('monthlySalary',d.monthlySalary); sv('dailySalary',d.dailySalary); sv('hourlySalary',d.hourlySalary);
+  showWageFields();
+}
+
+function resetAll() {
+  if (!confirm('入力内容をすべてリセットします。よろしいですか？')) return;
+  localStorage.removeItem(LS_KEY);
+  individualHolidays = [];
+  location.reload();
+}
+
+// ────────────────────────────────────────────────
+// Init
+// ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('checkDate').value = new Date().toISOString().split('T')[0];
+  loadAll();
+  showFlexDetails();
+  showPartTimeFields();
+  showWageFields();
+  updateWeekdayStyle();
+  recalcAll();
+});
+</script>
+</body>
+</html>
