@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ハローワーク 労働条件チェッカー</title>
+  <!-- Firebase SDK (compat v10) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: "Meiryo", "Yu Gothic", "MS Gothic", sans-serif; background: #eef2f7; color: #1a202c; font-size: 14px; line-height: 1.5; }
@@ -98,10 +102,45 @@
     .btn-reset:hover { background: #4b5563; }
     .btn-small { padding: 5px 12px; font-size: 12px; background: #1a3a6e; color: white; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; }
 
+    /* ── クラウドバー ── */
+    .cloud-bar { background: #163d75; padding: 6px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .cloud-icon { color: rgba(255,255,255,0.65); font-size: 15px; }
+    .cloud-user { color: #c3d4ee; font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cloud-note { color: rgba(255,255,255,0.5); font-size: 11px; }
+    .btn-cloud { padding: 4px 13px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.12); color: white; cursor: pointer; font-size: 12px; font-family: inherit; transition: background 0.15s; white-space: nowrap; }
+    .btn-cloud:hover { background: rgba(255,255,255,0.22); }
+    .btn-cloud-save { background: #047857; border-color: #065f46; }
+    .btn-cloud-save:hover { background: #065f46; }
+    .btn-cloud-out { color: #fca5a5; border-color: rgba(252,165,165,0.35); }
+
+    /* ── 履歴モーダル ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: white; border-radius: 10px; max-width: 640px; width: 100%; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .modal-header { padding: 14px 18px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+    .modal-header h3 { font-size: 15px; color: #1a3a6e; }
+    .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #6b7280; line-height: 1; padding: 0 4px; }
+    .modal-body { overflow-y: auto; padding: 12px 18px 18px; flex: 1; }
+    .history-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 11px 13px; margin-bottom: 9px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .history-item:hover { border-color: #4a7fcb; background: #f8fafc; }
+    .history-info { flex: 1; min-width: 0; }
+    .history-name { font-weight: bold; font-size: 13px; color: #1a202c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-meta { font-size: 11px; color: #718096; margin-top: 2px; }
+    .history-summary { display: flex; gap: 10px; margin-top: 4px; font-size: 12px; font-weight: bold; }
+    .history-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .btn-load { padding: 5px 12px; font-size: 12px; background: #1a3a6e; color: white; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; }
+    .btn-load:hover { background: #163d75; }
+    .btn-del  { padding: 5px 10px; font-size: 12px; background: #fee2e2; color: #dc2626; border-radius: 4px; border: 1px solid #fca5a5; cursor: pointer; font-family: inherit; }
+    .btn-del:hover { background: #fecaca; }
+    .modal-empty { text-align: center; color: #6b7280; padding: 36px 0; font-size: 13px; }
+
+    /* ── トースト通知 ── */
+    #app-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a3a6e; color: white; padding: 10px 22px; border-radius: 6px; font-size: 14px; z-index: 2000; box-shadow: 0 4px 16px rgba(0,0,0,0.25); transition: opacity 0.4s; pointer-events: none; opacity: 0; }
+
     @media print {
       body { background: white; font-size: 11px; }
       .app-header { background: #1a3a6e !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 8px 12px; }
-      .tabs-wrap, .actions, .no-print { display: none !important; }
+      .tabs-wrap, .actions, .no-print, .cloud-bar, .modal-overlay { display: none !important; }
       .section-panel { display: block !important; page-break-inside: avoid; }
       .overall-wrap { page-break-before: always; }
       .special-measure-wrap { margin: 4px 0; }
@@ -127,6 +166,23 @@
     </div>
   </div>
 </div>
+
+<div class="cloud-bar no-print" id="cloud-bar"></div>
+
+<!-- 履歴モーダル -->
+<div class="modal-overlay hidden no-print" id="history-modal" onclick="closeHistoryModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>💾 保存済みチェック一覧</h3>
+      <button class="modal-close" onclick="closeHistoryModal()">✕</button>
+    </div>
+    <div class="modal-body" id="history-list">
+      <div class="modal-empty">読み込み中...</div>
+    </div>
+  </div>
+</div>
+
+<div id="app-toast"></div>
 
 <div class="special-measure-wrap">
   <div class="special-measure">
@@ -1473,6 +1529,227 @@ function updateWeekdayStyle() {
 }
 
 // ────────────────────────────────────────────────
+// Firebase クラウド保存
+// ────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDPLACEHOLDER_REPLACE_ME",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "000000000000",
+  appId: "1:000000000000:web:REPLACE_ME"
+};
+
+let _db = null, _auth = null;
+
+function initFirebase() {
+  try {
+    firebase.app();
+  } catch(e) {
+    firebase.initializeApp(FIREBASE_CONFIG);
+  }
+  _auth = firebase.auth();
+  _db   = firebase.firestore();
+  _db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+  _auth.onAuthStateChanged(user => {
+    updateCloudUI(user);
+    if (user) updateHistoryBadge();
+  });
+}
+
+function updateCloudUI(user) {
+  const bar = document.getElementById('cloud-bar');
+  if (!bar) return;
+  if (user) {
+    bar.innerHTML =
+      '<span class="cloud-icon">☁️</span>' +
+      '<span class="cloud-user">' + escHtml(user.displayName || user.email) + '</span>' +
+      '<button class="btn-cloud btn-cloud-save" onclick="saveCheckToCloud()">💾 このチェックを保存</button>' +
+      '<button class="btn-cloud" onclick="openHistoryModal()" id="btn-history">📋 履歴</button>' +
+      '<button class="btn-cloud btn-cloud-out" onclick="signOutUser()">ログアウト</button>';
+  } else {
+    bar.innerHTML =
+      '<span class="cloud-icon">☁️</span>' +
+      '<span class="cloud-note">クラウド保存機能：</span>' +
+      '<button class="btn-cloud" onclick="signInWithGoogle()">Googleでログイン</button>';
+  }
+}
+
+function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  _auth.signInWithPopup(provider).catch(err => showToast('ログイン失敗: ' + err.message));
+}
+
+function signOutUser() {
+  _auth.signOut().then(() => showToast('ログアウトしました'));
+}
+
+function getCurrentInputs() {
+  return {
+    businessName:gv('businessName'), checkDate:gv('checkDate'), specialMeasure:gc('specialMeasure'),
+    startTime:gv('startTime'), endTime:gv('endTime'), breakTime:gv('breakTime'),
+    s36agreement:gv('s36agreement'), monthlyOT:gv('monthlyOT'), annualOT:gv('annualOT'),
+    specialClause:gv('specialClause'), specialMonthlyOT:gv('specialMonthlyOT'), specialAnnualOT:gv('specialAnnualOT'),
+    breakException:gv('breakException'),
+    weekdays: Array.from({length:7}, (_,i) => gc('wd'+i)),
+    holidayType:gv('holidayType'), additionalHolidays:gv('additionalHolidays'),
+    flexType:gv('flexType'),
+    flexMonthlyAgreement:gv('flexMonthlyAgreement'), flexMonthlyReport:gv('flexMonthlyReport'), flexMonthlyTotal:gv('flexMonthlyTotal'),
+    flexAnnualAgreement:gv('flexAnnualAgreement'), flexAnnualMaxDay:gv('flexAnnualMaxDay'), flexAnnualMaxWeek:gv('flexAnnualMaxWeek'),
+    flexFlexPeriod:gv('flexFlexPeriod'), flexFlexTotal:gv('flexFlexTotal'),
+    employmentType:gv('employmentType'), partTimeDays:gv('partTimeDays'), hourlyLeave:gv('hourlyLeave'),
+    otRate:gv('otRate'), nightRate:gv('nightRate'), holidayRate:gv('holidayRate'), ot60Rate:gv('ot60Rate'),
+    prefecture:gv('prefecture'), minWage:gv('minWage'),
+    wageType:gv('wageType'), monthlySalary:gv('monthlySalary'), fixedOT:gv('fixedOT'), fixedOTHours:gv('fixedOTHours'),
+    dailySalary:gv('dailySalary'), hourlySalary:gv('hourlySalary')
+  };
+}
+
+function getCheckSummary() {
+  const counts = { ok:0, warn:0, ng:0 };
+  document.querySelectorAll('.judgment').forEach(el => {
+    if (el.classList.contains('j-ok'))   counts.ok++;
+    else if (el.classList.contains('j-warn')) counts.warn++;
+    else if (el.classList.contains('j-ng'))   counts.ng++;
+  });
+  return counts;
+}
+
+async function saveCheckToCloud() {
+  const user = _auth.currentUser;
+  if (!user) { showToast('先にログインしてください'); return; }
+  const name = gv('businessName').trim() || '（事業所名未入力）';
+  const btn = document.querySelector('.btn-cloud-save');
+  if (btn) btn.disabled = true;
+  try {
+    await _db.collection('users').doc(user.uid).collection('checks').add({
+      savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      businessName: name,
+      checkDate: gv('checkDate'),
+      inputs: getCurrentInputs(),
+      summary: getCheckSummary()
+    });
+    showToast('💾 保存しました：' + name);
+    updateHistoryBadge();
+  } catch(e) {
+    showToast('保存失敗: ' + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function updateHistoryBadge() {
+  const user = _auth.currentUser;
+  if (!user) return;
+  try {
+    const snap = await _db.collection('users').doc(user.uid).collection('checks').get();
+    const btn = document.getElementById('btn-history');
+    if (btn && snap.size > 0) btn.textContent = '📋 履歴 (' + snap.size + ')';
+  } catch(e) {}
+}
+
+async function openHistoryModal() {
+  const user = _auth.currentUser;
+  if (!user) return;
+  document.getElementById('history-modal').classList.remove('hidden');
+  const listEl = document.getElementById('history-list');
+  listEl.innerHTML = '<div class="modal-empty">読み込み中...</div>';
+  try {
+    const snap = await _db.collection('users').doc(user.uid).collection('checks')
+      .orderBy('savedAt', 'desc').limit(50).get();
+    if (snap.empty) {
+      listEl.innerHTML = '<div class="modal-empty">保存済みのチェックはありません</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    snap.forEach(doc => {
+      const d = doc.data();
+      const saved = d.savedAt ? new Date(d.savedAt.seconds * 1000).toLocaleString('ja-JP') : '—';
+      const s = d.summary || {};
+      const item = document.createElement('div');
+      item.className = 'history-item';
+      item.dataset.id = doc.id;
+      item.innerHTML =
+        '<div class="history-info">' +
+          '<div class="history-name">' + escHtml(d.businessName || '（名称なし）') + '</div>' +
+          '<div class="history-meta">チェック日: ' + escHtml(d.checkDate || '—') + '　保存: ' + saved + '</div>' +
+          '<div class="history-summary">' +
+            (s.ok   ? '<span style="color:#059669">○ ' + s.ok   + '</span>' : '') +
+            (s.warn ? '<span style="color:#d97706">△ ' + s.warn + '</span>' : '') +
+            (s.ng   ? '<span style="color:#dc2626">✗ ' + s.ng   + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="history-actions">' +
+          '<button class="btn-load" onclick="restoreCheck(' + JSON.stringify(d.inputs).replace(/"/g,'&quot;') + ')">読込</button>' +
+          '<button class="btn-del"  onclick="deleteCheck(\'' + doc.id + '\', this.closest(\'.history-item\'))">削除</button>' +
+        '</div>';
+      listEl.appendChild(item);
+    });
+  } catch(e) {
+    listEl.innerHTML = '<div class="modal-empty">読み込み失敗: ' + escHtml(e.message) + '</div>';
+  }
+}
+
+function closeHistoryModal(e) {
+  if (e && e.target !== document.getElementById('history-modal')) return;
+  document.getElementById('history-modal').classList.add('hidden');
+}
+
+function restoreCheck(inputs) {
+  if (!inputs) return;
+  sv('businessName',inputs.businessName); sv('checkDate',inputs.checkDate); sc('specialMeasure',inputs.specialMeasure);
+  sv('startTime',inputs.startTime); sv('endTime',inputs.endTime); sv('breakTime',inputs.breakTime);
+  sv('s36agreement',inputs.s36agreement); sv('monthlyOT',inputs.monthlyOT); sv('annualOT',inputs.annualOT);
+  sv('specialClause',inputs.specialClause); sv('specialMonthlyOT',inputs.specialMonthlyOT); sv('specialAnnualOT',inputs.specialAnnualOT);
+  sv('breakException',inputs.breakException);
+  if (Array.isArray(inputs.weekdays)) inputs.weekdays.forEach((v,i) => sc('wd'+i, v));
+  sv('holidayType',inputs.holidayType); sv('additionalHolidays',inputs.additionalHolidays);
+  sv('flexType',inputs.flexType);
+  sv('flexMonthlyAgreement',inputs.flexMonthlyAgreement); sv('flexMonthlyReport',inputs.flexMonthlyReport); sv('flexMonthlyTotal',inputs.flexMonthlyTotal);
+  sv('flexAnnualAgreement',inputs.flexAnnualAgreement); sv('flexAnnualMaxDay',inputs.flexAnnualMaxDay); sv('flexAnnualMaxWeek',inputs.flexAnnualMaxWeek);
+  sv('flexFlexPeriod',inputs.flexFlexPeriod); sv('flexFlexTotal',inputs.flexFlexTotal);
+  sv('employmentType',inputs.employmentType); sv('partTimeDays',inputs.partTimeDays); sv('hourlyLeave',inputs.hourlyLeave);
+  sv('otRate',inputs.otRate); sv('nightRate',inputs.nightRate); sv('holidayRate',inputs.holidayRate); sv('ot60Rate',inputs.ot60Rate);
+  sv('prefecture',inputs.prefecture); sv('minWage',inputs.minWage);
+  sv('wageType',inputs.wageType); sv('monthlySalary',inputs.monthlySalary); sv('fixedOT',inputs.fixedOT); sv('fixedOTHours',inputs.fixedOTHours);
+  sv('dailySalary',inputs.dailySalary); sv('hourlySalary',inputs.hourlySalary);
+  showFlexDetails(); showPartTimeFields(); showWageFields(); updateWeekdayStyle();
+  recalcAll(); saveAll();
+  closeHistoryModal();
+  showToast('読み込みました：' + (inputs.businessName || '（名称なし）'));
+}
+
+async function deleteCheck(id, itemEl) {
+  const user = _auth.currentUser;
+  if (!user) return;
+  if (!confirm('このチェックを削除しますか？')) return;
+  try {
+    await _db.collection('users').doc(user.uid).collection('checks').doc(id).delete();
+    if (itemEl) itemEl.remove();
+    updateHistoryBadge();
+    const listEl = document.getElementById('history-list');
+    if (listEl && !listEl.querySelector('.history-item'))
+      listEl.innerHTML = '<div class="modal-empty">保存済みのチェックはありません</div>';
+  } catch(e) {
+    showToast('削除失敗: ' + e.message);
+  }
+}
+
+let _toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('app-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 3000);
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ────────────────────────────────────────────────
 // LocalStorage
 // ────────────────────────────────────────────────
 const LS_KEY = 'hwLaborChecker_v1';
@@ -1543,6 +1820,7 @@ document.addEventListener('DOMContentLoaded', () => {
   showWageFields();
   updateWeekdayStyle();
   recalcAll();
+  initFirebase();
 });
 </script>
 </body>
