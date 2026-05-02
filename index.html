@@ -827,7 +827,8 @@ function calcS1() {
   const st = document.getElementById('startTime').value;
   const et = document.getElementById('endTime').value;
   const year = new Date().getFullYear();
-  const awd = getAnnualWorkDays(year);
+  const annOff1 = getAnnualOffDays(year);   // ④-2の年間休日日数と同じ値
+  const awd = 365 - annOff1;
   const pubHol = countPubHolOnWorkDays(year);
   const addHol = getAdditionalHolidays();
   const dnames = ['月','火','水','木','金','土','日'];
@@ -853,14 +854,16 @@ function calcS1() {
     '法定基準: ' + wLim + '時間以内' + (isSpecial() ? '（特例措置適用中: 44時間）' : '') + '（労基法 第32条1項' + (isSpecial() ? '、第40条' : '') + '）\n' +
     '判  定: ' + (j12==='ok' ? '○ 法定基準内' : '✗ ' + wLim + '時間超過'));
 
+  const offDaysBreakdown =
+    '週休: ' + getWeeklyOffDays() + '日 × 52週 = ' + (getWeeklyOffDays()*52) + '日' +
+    (pubHol > 0 ? '\n祝日（就業日に当たる分）: ' + pubHol + '日  ← 祝日は' + holLabel : '') +
+    (addHol > 0 ? '\n追加休日: ' + addHol + '日' : '');
   setJ('j1-3', 'info');
   setP('proc1-3',
-    '週' + wdays + '日 × 52週 = ' + (wdays*52) + '日（基準）\n' +
-    (pubHol > 0
-      ? '  − 祝日（就業日に当たる分）: ' + pubHol + '日  ← 祝日は' + holLabel + '\n'
-      : '  祝日: ' + holLabel + 'のため週休のみで計算\n') +
-    (addHol > 0 ? '  − 追加休日: ' + addHol + '日\n' : '') +
-    '= 推定年間就業日数: ' + awd + '日\n' +
+    '④ 休日の設定から推計\n' +
+    offDaysBreakdown + '\n' +
+    '= 年間休日合計（④-2の値）: ' + annOff1 + '日\n' +
+    '年間就業日数: 365 − ' + annOff1 + ' = ' + awd + '日\n' +
     '年間総労働時間（推定）: ' + awd + '日 × ' + minToH(dm) + '時間 = ' + (dm * awd / 60).toFixed(1) + '時間');
 
   return { '1-1': j11, '1-2': j12 };
@@ -1322,7 +1325,7 @@ function calcS8() {
         const otRate = parseFloat(document.getElementById('otRate').value) || 25;
         const premiumRate = 1 + otRate / 100;
         const legalAnnualH = weeklyLimit() * 52;
-        const contractedAnnualH = dailyH * getAnnualWorkDays(year);  // ①-3と同じ値
+        const contractedAnnualH = dailyH * (365 - getAnnualOffDays(year));  // ①-3と同じ値
         const annualWithinStatCap = legalAnnualH - contractedAnnualH;  // 法定内容量（年間）
         const monthlyWithinStatH = Math.max(0, annualWithinStatCap / 12); // 法定内時間外の上限/月
 
