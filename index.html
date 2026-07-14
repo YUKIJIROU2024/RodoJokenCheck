@@ -754,7 +754,7 @@
       <div class="check-header">
         <div>
           <div class="check-label">8-3：固定残業代の適正額チェック</div>
-          <div class="check-sub">設定残業時間: 最低賃金×割増率</div>
+          <div class="check-sub">設定残業時間: 8-1の時間換算額×割増率</div>
         </div>
         <span class="judgment" id="j8-3">－</span>
       </div>
@@ -1378,7 +1378,7 @@ function calcS8() {
         const otRate = parseFloat(document.getElementById('otRate').value) || 25;
         const premiumRate = 1 + otRate / 100;
 
-        const requiredAmount = fixedOTHours * minWage * premiumRate;
+        const requiredAmount = fixedOTHours * rateBasic * premiumRate;
 
         const fixedOTHourlyRate = fixedOT / fixedOTHours;
         const diff83 = fixedOT - requiredAmount;
@@ -1389,8 +1389,8 @@ function calcS8() {
           '固定残業代（月額）: ' + fixedOT.toLocaleString() + '円\n' +
           '設定残業時間（月）: ' + fixedOTHours + '時間\n' +
           '固定残業代の時間単価: ' + fixedOT.toLocaleString() + '円 ÷ ' + fixedOTHours + '時間 = ' + fixedOTHourlyRate.toFixed(2) + '円/時間\n\n' +
-          '【必要な固定残業代額（最低賃金 ' + minWage.toLocaleString() + '円/時間 ベース）】\n' +
-          '設定残業時間: ' + fixedOTHours + '時間 × ' + minWage.toLocaleString() + '円 × ' + premiumRate.toFixed(2) + '（割増' + otRate + '%） = ' + Math.round(requiredAmount) + '円\n\n' +
+          '【必要な固定残業代額（8-1の時間換算額 ' + rateBasic.toFixed(2) + '円/時間 ベース）】\n' +
+          '設定残業時間: ' + fixedOTHours + '時間 × ' + rateBasic.toFixed(2) + '円 × ' + premiumRate.toFixed(2) + '（割増' + otRate + '%） = ' + Math.round(requiredAmount) + '円\n\n' +
           '必要額合計:   ' + Math.round(requiredAmount) + '円/月\n' +
           '固定残業代:   ' + fixedOT.toLocaleString() + '円/月\n' +
           '差額:         ' + (diff83 >= 0 ? '+' : '') + Math.round(diff83) + '円/月\n' +
