@@ -753,8 +753,8 @@
     <div class="check-item" id="check8-3" style="display:none">
       <div class="check-header">
         <div>
-          <div class="check-label">8-3：固定残業代の適正額チェック（法定内外で按分）</div>
-          <div class="check-sub">法定外時間外: 最低賃金×割増率 ／ 法定内時間外: 最低賃金×1.00</div>
+          <div class="check-label">8-3：固定残業代の適正額チェック</div>
+          <div class="check-sub">設定残業時間: 最低賃金×割増率</div>
         </div>
         <span class="judgment" id="j8-3">－</span>
       </div>
@@ -1372,27 +1372,13 @@ function calcS8() {
         '判  定: ' + (j82==='ok' ? '○ 最低賃金以上' : '✗ 最低賃金未満（' + Math.abs(diffTotal).toFixed(2) + '円/時間 不足）'));
       result['8-2'] = j82;
 
-      // 8-3: fixed OT adequacy check — split by within-statutory vs statutory OT
-      // Uses ①-3 contracted annual hours (weeklyWorkDays*52 - pubHol - addHol)
-      // 差分 = 法定上限 − 契約年間時間 = 法定内に収まる余裕（月割り → 法定内時間外上限/月）
-      // 設定残業時間のうちその余裕を超えた分が法定外 → 割増必要
+      // 8-3: fixed OT adequacy check — all set OT hours are paid at the overtime premium rate
       if (fixedOTHours > 0) {
         document.getElementById('check8-3').style.display = 'block';
         const otRate = parseFloat(document.getElementById('otRate').value) || 25;
         const premiumRate = 1 + otRate / 100;
-        const legalAnnualH = weeklyLimit() * 52;
-        const contractedAnnualH = dailyH * (365 - getAnnualOffDays(year));  // ①-3と同じ値
-        const annualWithinStatCap = legalAnnualH - contractedAnnualH;  // 法定内容量（年間）
-        const monthlyWithinStatH = Math.max(0, annualWithinStatCap / 12); // 法定内時間外の上限/月
 
-        // 法定内分（割増なし）: 法定内容量に収まる分
-        // 法定外分（割増あり）: 法定内容量を超えた分
-        const withinOTh = Math.min(fixedOTHours, monthlyWithinStatH);
-        const statOTh   = Math.max(0, fixedOTHours - monthlyWithinStatH);
-
-        const reqForWithin = withinOTh * minWage;
-        const reqForStat   = statOTh   * minWage * premiumRate;
-        const requiredAmount = reqForWithin + reqForStat;
+        const requiredAmount = fixedOTHours * minWage * premiumRate;
 
         const fixedOTHourlyRate = fixedOT / fixedOTHours;
         const diff83 = fixedOT - requiredAmount;
@@ -1403,35 +1389,8 @@ function calcS8() {
           '固定残業代（月額）: ' + fixedOT.toLocaleString() + '円\n' +
           '設定残業時間（月）: ' + fixedOTHours + '時間\n' +
           '固定残業代の時間単価: ' + fixedOT.toLocaleString() + '円 ÷ ' + fixedOTHours + '時間 = ' + fixedOTHourlyRate.toFixed(2) + '円/時間\n\n' +
-          '【法定内・法定外の内訳計算（①-3の年間労働時間を使用）】\n' +
-          '年間契約労働時間:     ' + contractedAnnualH.toFixed(1) + '時間（①-3の値）\n' +
-          '年間法定上限時間:     ' + legalAnnualH + '時間（週' + weeklyLimit() + '時間 × 52週' + (isSpecial() ? '・特例措置適用' : '') + '）\n' +
-          '差分（法定内容量/年）: ' + legalAnnualH + ' − ' + contractedAnnualH.toFixed(1) + ' = ' + annualWithinStatCap.toFixed(1) + '時間\n';
-
-        if (annualWithinStatCap <= 0) {
-          proc83 += '→ 年間契約時間が法定上限以上のため、設定残業はすべて法定外\n';
-          proc83 += '月割り法定内容量: なし（0時間/月）\n';
-        } else {
-          proc83 += '月割り法定内容量: ' + annualWithinStatCap.toFixed(1) + '時間 ÷ 12ヶ月 = ' + monthlyWithinStatH.toFixed(2) + '時間/月\n';
-        }
-
-        proc83 += '\n【設定残業時間の内訳（月 ' + fixedOTHours + '時間）】\n';
-        if (withinOTh > 0) {
-          proc83 += '法定内時間外: ' + withinOTh.toFixed(2) + '時間（割増なし）\n';
-        }
-        if (statOTh > 0) {
-          proc83 += '法定外時間外: ' + statOTh.toFixed(2) + '時間（割増' + otRate + '%）\n';
-        }
-
-        proc83 +=
-          '\n【必要な固定残業代額（最低賃金 ' + minWage.toLocaleString() + '円/時間 ベース）】\n';
-        if (withinOTh > 0) {
-          proc83 += '法定内: ' + withinOTh.toFixed(2) + '時間 × ' + minWage.toLocaleString() + '円 × 1.00 = ' + Math.round(reqForWithin) + '円\n';
-        }
-        if (statOTh > 0) {
-          proc83 += '法定外: ' + statOTh.toFixed(2) + '時間 × ' + minWage.toLocaleString() + '円 × ' + premiumRate.toFixed(2) + ' = ' + Math.round(reqForStat) + '円\n';
-        }
-        proc83 +=
+          '【必要な固定残業代額（最低賃金 ' + minWage.toLocaleString() + '円/時間 ベース）】\n' +
+          '設定残業時間: ' + fixedOTHours + '時間 × ' + minWage.toLocaleString() + '円 × ' + premiumRate.toFixed(2) + '（割増' + otRate + '%） = ' + Math.round(requiredAmount) + '円\n\n' +
           '必要額合計:   ' + Math.round(requiredAmount) + '円/月\n' +
           '固定残業代:   ' + fixedOT.toLocaleString() + '円/月\n' +
           '差額:         ' + (diff83 >= 0 ? '+' : '') + Math.round(diff83) + '円/月\n' +
