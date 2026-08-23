@@ -940,38 +940,46 @@ function setP(id, text) { document.getElementById(id).textContent = text; }
 // Section ① 労働時間
 // ────────────────────────────────────────────────
 function calcS1() {
-  const dm = getDailyMin();
-  const wdays = getWeeklyWorkDays();
-  const wMin = dm * wdays;
+  const dnames = ['月','火','水','木','金','土','日'];
+  const workDays = getWorkDayIndices();
   const wLim = weeklyLimit();
-  const brk = parseInt(document.getElementById('breakTime').value) || 0;
-  const st = document.getElementById('startTime').value;
-  const et = document.getElementById('endTime').value;
   const year = new Date().getFullYear();
   const annOff1 = getAnnualOffDays(year);   // ④-2の年間休日日数と同じ値
   const awd = 365 - annOff1;
   const pubHol = countPubHolOnWorkDays(year);
   const addHol = getAdditionalHolidays();
-  const dnames = ['月','火','水','木','金','土','日'];
   const offIdx = [];
   for (let i = 0; i < 7; i++) if (document.getElementById('wd'+i).checked) offIdx.push(i);
   const workStr = dnames.filter((_,i)=>!offIdx.includes(i)).join('・') || 'なし';
   const offStr  = offIdx.length ? offIdx.map(i=>dnames[i]).join('・') : 'なし';
   const holLabel = document.getElementById('holidayType').value === 'off' ? '休日扱い' : '出勤日';
 
-  const j11 = dm/60 <= 8 ? 'ok' : 'ng';
+  const perDay = workDays.map(i => {
+    const sched = getDaySchedule(i);
+    const min = getDailyMinFor(i);
+    return { i, name: dnames[i], sched, min };
+  });
+  const wMin = perDay.reduce((s,d) => s + d.min, 0);
+  const avgMin = perDay.length ? wMin / perDay.length : 0;
+  const overDays = perDay.filter(d => d.min/60 > 8);
+
+  const j11 = overDays.length ? 'ng' : 'ok';
   setJ('j1-1', j11);
+  const dayLines1 = perDay.map(d =>
+    d.name + ': 始業 ' + d.sched.start + '  終業 ' + d.sched.end + '  休憩 ' + d.sched.break + '分 → ' + minToStr(d.min) +
+    (d.min/60 > 8 ? '（8時間超）' : '')
+  ).join('\n');
   setP('proc1-1',
-    '始業: ' + st + '  終業: ' + et + '  休憩: ' + brk + '分\n' +
-    '計算式: (' + et + ' − ' + st + ') − ' + brk + '分 = ' + dm + '分 = ' + minToStr(dm) + '\n' +
+    (dayLines1 || '（就業日がありません）') + '\n\n' +
     '法定基準: 8時間以内（労基法 第32条2項）\n' +
-    '判  定: ' + (j11==='ok' ? '○ 法定基準内' : '✗ 8時間超過 → 時間外労働となるため36協定が必要'));
+    '判  定: ' + (j11==='ok' ? '○ 法定基準内' : '✗ ' + overDays.map(d=>d.name).join('・') + '曜日が8時間超過 → 時間外労働となるため36協定が必要'));
 
   const j12 = wMin/60 <= wLim ? 'ok' : 'ng';
   setJ('j1-2', j12);
+  const dayLines2 = perDay.map(d => minToH(d.min) + 'h(' + d.name + ')').join(' + ') || '0';
   setP('proc1-2',
-    '就業日: ' + workStr + '（週' + wdays + '日）  休日: ' + offStr + '（週' + (7-wdays) + '日）\n' +
-    '計算式: ' + minToH(dm) + '時間/日 × 週' + wdays + '日 = ' + minToH(wMin) + '時間/週\n' +
+    '就業日: ' + workStr + '（週' + workDays.length + '日）  休日: ' + offStr + '（週' + (7-workDays.length) + '日）\n' +
+    '計算式: ' + dayLines2 + ' = ' + minToH(wMin) + '時間/週\n' +
     '法定基準: ' + wLim + '時間以内' + (isSpecial() ? '（特例措置適用中: 44時間）' : '') + '（労基法 第32条1項' + (isSpecial() ? '、第40条' : '') + '）\n' +
     '判  定: ' + (j12==='ok' ? '○ 法定基準内' : '✗ ' + wLim + '時間超過'));
 
@@ -985,7 +993,8 @@ function calcS1() {
     offDaysBreakdown + '\n' +
     '= 年間休日合計（④-2の値）: ' + annOff1 + '日\n' +
     '年間就業日数: 365 − ' + annOff1 + ' = ' + awd + '日\n' +
-    '年間総労働時間（推定）: ' + awd + '日 × ' + minToH(dm) + '時間 = ' + (dm * awd / 60).toFixed(1) + '時間');
+    '平均1日所定労働時間: ' + minToH(wMin) + '時間/週 ÷ 週' + workDays.length + '日 = ' + minToH(avgMin) + '時間/日\n' +
+    '年間総労働時間（推定）: ' + awd + '日 × ' + minToH(avgMin) + '時間 = ' + (avgMin * awd / 60).toFixed(1) + '時間');
 
   return { '1-1': j11, '1-2': j12 };
 }
