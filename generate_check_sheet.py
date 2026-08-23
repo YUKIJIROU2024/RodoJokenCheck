@@ -303,9 +303,12 @@ def build_check_sheet(b):
     b.cb('weeklyOffCount', '週休日数', f'={woc_parts}', fmt='0',
          narration=f'={b.ref("weeklyOffCount")}&"日/週"')
     b.cb('weeklyWorkDays', '週労働日数', f'=7-{b.ref("weeklyOffCount")}', fmt='0')
+    weekly_sum_parts = '+'.join(
+        f'({b.ref(f"wd{d}")}="いいえ")*{b.ref(f"dayMin{d}")}' for d in range(7)
+    )
     b.reserve('weeklyH')
-    b.cb('weeklyH', '週の所定労働時間（時間）', f'={b.ref("dailyH")}*{b.ref("weeklyWorkDays")}', fmt='0.00',
-         narration=f'=TEXT({b.ref("dailyH")},"0.00")&"時間/日 × "&{b.ref("weeklyWorkDays")}&"日 = "&TEXT({b.ref("weeklyH")},"0.00")&"時間/週"')
+    b.cb('weeklyH', '週の所定労働時間（時間）', f'=({weekly_sum_parts})/60', fmt='0.00',
+         narration=f'="就業日の所定労働時間合計 ÷ 60 = "&TEXT({b.ref("weeklyH")},"0.00")&"時間/週"')
 
     max_parts = ','.join(
         f'({b.ref(f"wd{d}")}="いいえ")*{b.ref(f"dayMin{d}")}' for d in range(7)
