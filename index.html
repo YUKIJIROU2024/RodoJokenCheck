@@ -63,6 +63,12 @@
     .weekday-label:hover { background: #eef2f7; }
     .weekday-label input[type="checkbox"] { width: 14px; height: 14px; }
     .weekday-label.is-holiday { background: #fef3c7; border-color: #f0a500; }
+    .weekday-schedule-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+    .weekday-schedule-table th, .weekday-schedule-table td { border: 1px solid #cbd5e0; padding: 6px 8px; text-align: left; }
+    .weekday-schedule-table th { background: #eef2f7; font-weight: bold; }
+    .weekday-schedule-table input[type="time"], .weekday-schedule-table input[type="number"] { width: 100%; box-sizing: border-box; padding: 4px 6px; border: 1px solid #cbd5e0; border-radius: 4px; }
+    .weekday-schedule-table tr.is-holiday-row { background: #fef3c7; }
+    .weekday-schedule-table tr.is-holiday-row input { background: #f3f4f6; color: #9ca3af; }
 
     .check-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; background: white; }
     .check-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -232,6 +238,28 @@
     </div>
     <div class="info-box">
       週の就業日数はタブ「④ 休日」で設定した休日から自動計算されます。変形労働時間制を採用する場合は「⑤ 変形労働時間制」タブも設定してください。
+    </div>
+    <div class="form-row" style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:bold;color:#4a5568;cursor:pointer">
+        <input type="checkbox" id="useWeekdaySchedule" onchange="toggleWeekdaySchedule(); recalcAll(); saveAll()">
+        曜日ごとに所定労働時間を設定する
+      </label>
+    </div>
+    <div id="weekdayScheduleTable" style="display:none; margin:6px 0 16px">
+      <table class="weekday-schedule-table">
+        <thead>
+          <tr><th style="width:60px">曜日</th><th>始業</th><th>終業</th><th>休憩（分）</th></tr>
+        </thead>
+        <tbody>
+          <tr id="dayRow0"><td>月</td><td><input type="time" id="dayStart0" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd0" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak0" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow1"><td>火</td><td><input type="time" id="dayStart1" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd1" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak1" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow2"><td>水</td><td><input type="time" id="dayStart2" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd2" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak2" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow3"><td>木</td><td><input type="time" id="dayStart3" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd3" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak3" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow4"><td>金</td><td><input type="time" id="dayStart4" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd4" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak4" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow5"><td>土</td><td><input type="time" id="dayStart5" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd5" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak5" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow6"><td>日</td><td><input type="time" id="dayStart6" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd6" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak6" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+        </tbody>
+      </table>
     </div>
     <div class="check-item">
       <div class="check-header">
@@ -819,12 +847,38 @@ function minToH(m) { return (m / 60).toFixed(2); }
 // ────────────────────────────────────────────────
 // Core calculations
 // ────────────────────────────────────────────────
-function getDailyMin() {
-  const start = timeToMin(document.getElementById('startTime').value);
-  let end = timeToMin(document.getElementById('endTime').value);
-  const brk = parseInt(document.getElementById('breakTime').value) || 0;
+function getWorkDayIndices() {
+  const r = [];
+  for (let i = 0; i < 7; i++) if (!document.getElementById('wd' + i).checked) r.push(i);
+  return r;
+}
+function getDaySchedule(i) {
+  if (document.getElementById('useWeekdaySchedule').checked) {
+    return {
+      start: document.getElementById('dayStart' + i).value,
+      end:   document.getElementById('dayEnd' + i).value,
+      break: parseInt(document.getElementById('dayBreak' + i).value) || 0
+    };
+  }
+  return {
+    start: document.getElementById('startTime').value,
+    end:   document.getElementById('endTime').value,
+    break: parseInt(document.getElementById('breakTime').value) || 0
+  };
+}
+function getDailyMinFor(i) {
+  const sched = getDaySchedule(i);
+  const start = timeToMin(sched.start);
+  let end = timeToMin(sched.end);
   if (end < start) end += 24 * 60; // overnight
-  return Math.max(0, end - start - brk);
+  return Math.max(0, end - start - sched.break);
+}
+function getWeeklyMinutes() {
+  return getWorkDayIndices().reduce((sum, i) => sum + getDailyMinFor(i), 0);
+}
+function getAvgDailyMin() {
+  const days = getWorkDayIndices();
+  return days.length > 0 ? getWeeklyMinutes() / days.length : 0;
 }
 function getWeeklyWorkDays() {
   let off = 0;
@@ -875,38 +929,46 @@ function setP(id, text) { document.getElementById(id).textContent = text; }
 // Section ① 労働時間
 // ────────────────────────────────────────────────
 function calcS1() {
-  const dm = getDailyMin();
-  const wdays = getWeeklyWorkDays();
-  const wMin = dm * wdays;
+  const dnames = ['月','火','水','木','金','土','日'];
+  const workDays = getWorkDayIndices();
   const wLim = weeklyLimit();
-  const brk = parseInt(document.getElementById('breakTime').value) || 0;
-  const st = document.getElementById('startTime').value;
-  const et = document.getElementById('endTime').value;
   const year = new Date().getFullYear();
   const annOff1 = getAnnualOffDays(year);   // ④-2の年間休日日数と同じ値
   const awd = 365 - annOff1;
   const pubHol = countPubHolOnWorkDays(year);
   const addHol = getAdditionalHolidays();
-  const dnames = ['月','火','水','木','金','土','日'];
   const offIdx = [];
   for (let i = 0; i < 7; i++) if (document.getElementById('wd'+i).checked) offIdx.push(i);
   const workStr = dnames.filter((_,i)=>!offIdx.includes(i)).join('・') || 'なし';
   const offStr  = offIdx.length ? offIdx.map(i=>dnames[i]).join('・') : 'なし';
   const holLabel = document.getElementById('holidayType').value === 'off' ? '休日扱い' : '出勤日';
 
-  const j11 = dm/60 <= 8 ? 'ok' : 'ng';
+  const perDay = workDays.map(i => {
+    const sched = getDaySchedule(i);
+    const min = getDailyMinFor(i);
+    return { i, name: dnames[i], sched, min };
+  });
+  const wMin = perDay.reduce((s,d) => s + d.min, 0);
+  const avgMin = getAvgDailyMin();
+  const overDays = perDay.filter(d => d.min/60 > 8);
+
+  const j11 = overDays.length ? 'ng' : 'ok';
   setJ('j1-1', j11);
+  const dayLines1 = perDay.map(d =>
+    d.name + ': 始業 ' + d.sched.start + '  終業 ' + d.sched.end + '  休憩 ' + d.sched.break + '分 → ' + minToStr(d.min) +
+    (d.min/60 > 8 ? '（8時間超）' : '')
+  ).join('\n');
   setP('proc1-1',
-    '始業: ' + st + '  終業: ' + et + '  休憩: ' + brk + '分\n' +
-    '計算式: (' + et + ' − ' + st + ') − ' + brk + '分 = ' + dm + '分 = ' + minToStr(dm) + '\n' +
+    (dayLines1 || '（就業日がありません）') + '\n\n' +
     '法定基準: 8時間以内（労基法 第32条2項）\n' +
-    '判  定: ' + (j11==='ok' ? '○ 法定基準内' : '✗ 8時間超過 → 時間外労働となるため36協定が必要'));
+    '判  定: ' + (j11==='ok' ? '○ 法定基準内' : '✗ ' + overDays.map(d=>d.name).join('・') + '曜日が8時間超過 → 時間外労働となるため36協定が必要'));
 
   const j12 = wMin/60 <= wLim ? 'ok' : 'ng';
   setJ('j1-2', j12);
+  const dayLines2 = perDay.map(d => minToH(d.min) + 'h(' + d.name + ')').join(' + ') || '0';
   setP('proc1-2',
-    '就業日: ' + workStr + '（週' + wdays + '日）  休日: ' + offStr + '（週' + (7-wdays) + '日）\n' +
-    '計算式: ' + minToH(dm) + '時間/日 × 週' + wdays + '日 = ' + minToH(wMin) + '時間/週\n' +
+    '就業日: ' + workStr + '（週' + workDays.length + '日）  休日: ' + offStr + '（週' + (7-workDays.length) + '日）\n' +
+    '計算式: ' + dayLines2 + ' = ' + minToH(wMin) + '時間/週\n' +
     '法定基準: ' + wLim + '時間以内' + (isSpecial() ? '（特例措置適用中: 44時間）' : '') + '（労基法 第32条1項' + (isSpecial() ? '、第40条' : '') + '）\n' +
     '判  定: ' + (j12==='ok' ? '○ 法定基準内' : '✗ ' + wLim + '時間超過'));
 
@@ -920,7 +982,8 @@ function calcS1() {
     offDaysBreakdown + '\n' +
     '= 年間休日合計（④-2の値）: ' + annOff1 + '日\n' +
     '年間就業日数: 365 − ' + annOff1 + ' = ' + awd + '日\n' +
-    '年間総労働時間（推定）: ' + awd + '日 × ' + minToH(dm) + '時間 = ' + (dm * awd / 60).toFixed(1) + '時間');
+    '平均1日所定労働時間: ' + minToH(wMin) + '時間/週 ÷ 週' + workDays.length + '日 = ' + minToH(avgMin) + '時間/日\n' +
+    '年間総労働時間（推定）: ' + awd + '日 × ' + minToH(avgMin) + '時間 = ' + (avgMin * awd / 60).toFixed(1) + '時間');
 
   return { '1-1': j11, '1-2': j12 };
 }
@@ -974,18 +1037,30 @@ function calcS2() {
 // Section ③ 休憩
 // ────────────────────────────────────────────────
 function calcS3() {
-  const dm  = getDailyMin();
-  const brk = parseInt(document.getElementById('breakTime').value) || 0;
+  const dnames = ['月','火','水','木','金','土','日'];
   const exc = document.getElementById('breakException').value;
-  let req = 0;
-  if (dm > 480) req = 60;
-  else if (dm > 360) req = 45;
+  const workDays = getWorkDayIndices();
 
-  const j31 = brk >= req ? 'ok' : 'ng';
+  const perDay = workDays.map(i => {
+    const sched = getDaySchedule(i);
+    const min = getDailyMinFor(i);
+    let req = 0;
+    if (min > 480) req = 60;
+    else if (min > 360) req = 45;
+    return { i, name: dnames[i], min, brk: sched.break, req, ok: sched.break >= req };
+  });
+  const shortDays = perDay.filter(d => !d.ok);
+
+  const j31 = shortDays.length ? 'ng' : 'ok';
   setJ('j3-1', j31);
-  setP('proc3-1', req === 0
-    ? '1日の労働時間: ' + minToStr(dm) + '（6時間以下）\n→ 法律上の休憩付与義務なし\n判定: ○'
-    : '1日の労働時間: ' + minToStr(dm) + '\n→ ' + (dm>480 ? '8時間超 → 60分以上' : '6時間超8時間以下 → 45分以上') + 'の休憩が必要（労基法 第34条1項）\n設定休憩: ' + brk + '分  必要休憩: ' + req + '分\n判  定: ' + (j31==='ok' ? '○ 基準内' : '✗ 休憩時間不足（' + req + '分以上必要）'));
+  const dayLines = perDay.map(d =>
+    d.name + ': 労働 ' + minToStr(d.min) + ' → 必要休憩 ' + (d.req === 0 ? '不要（6時間以下）' : d.req + '分以上') +
+    '  設定休憩 ' + d.brk + '分' + (d.ok ? '' : '（不足）')
+  ).join('\n');
+  setP('proc3-1',
+    (dayLines || '（就業日がありません）') + '\n\n' +
+    '法定基準: 6時間超→45分以上、8時間超→60分以上（労基法 第34条1項）\n' +
+    '判  定: ' + (j31==='ok' ? '○ 基準内' : '✗ ' + shortDays.map(d=>d.name).join('・') + '曜日の休憩時間不足'));
 
   setJ('j3-2', 'ok');
   setP('proc3-2',
@@ -1276,8 +1351,7 @@ function onPrefectureChange() {
 function calcS8() {
   const minWage = parseFloat(document.getElementById('minWage').value) || 0;
   const wageType = document.getElementById('wageType').value;
-  const dm = getDailyMin();
-  const dailyH = dm / 60;
+  const dailyH = getAvgDailyMin() / 60;
   const pref = document.getElementById('prefecture').value || '（未選択）';
 
   // hide optional check items by default
@@ -1422,7 +1496,7 @@ function calcS8() {
       '適用最低賃金: ' + pref + ' ' + minWage.toLocaleString() + '円/時間\n' +
       '日給: ' + daily.toLocaleString() + '円\n\n' +
       '【時間換算額の計算】\n' +
-      '  1日の所定労働時間: ' + dailyH.toFixed(2) + '時間\n' +
+      '  平均1日所定労働時間: ' + dailyH.toFixed(2) + '時間\n' +
       '  ' + daily.toLocaleString() + '円 ÷ ' + dailyH.toFixed(2) + '時間 = ' + hourlyRate.toFixed(2) + '円/時間\n\n' +
       '最低賃金:   ' + minWage.toLocaleString() + '円/時間\n' +
       '差額:       ' + (diff >= 0 ? '+' : '') + diff.toFixed(2) + '円/時間\n' +
@@ -1483,8 +1557,39 @@ function showWageFields() {
   document.getElementById('wageHourly').style.display  = wt==='hourly'  ? 'block' : 'none';
 }
 function updateWeekdayStyle() {
-  for (let i=0;i<7;i++)
-    document.getElementById('wdLabel'+i).classList.toggle('is-holiday', document.getElementById('wd'+i).checked);
+  for (let i=0;i<7;i++) {
+    const isHoliday = document.getElementById('wd'+i).checked;
+    document.getElementById('wdLabel'+i).classList.toggle('is-holiday', isHoliday);
+    const row = document.getElementById('dayRow'+i);
+    if (row) {
+      row.classList.toggle('is-holiday-row', isHoliday);
+      document.getElementById('dayStart'+i).disabled = isHoliday;
+      document.getElementById('dayEnd'+i).disabled = isHoliday;
+      document.getElementById('dayBreak'+i).disabled = isHoliday;
+    }
+  }
+}
+function applyWeekdayScheduleVisibility() {
+  document.getElementById('weekdayScheduleTable').style.display =
+    document.getElementById('useWeekdaySchedule').checked ? 'block' : 'none';
+}
+function toggleWeekdaySchedule() {
+  if (document.getElementById('useWeekdaySchedule').checked) {
+    const common = {
+      start: document.getElementById('startTime').value,
+      end:   document.getElementById('endTime').value,
+      brk:   document.getElementById('breakTime').value
+    };
+    for (let i = 0; i < 7; i++) {
+      const s = document.getElementById('dayStart' + i);
+      if (!s.value) {
+        s.value = common.start;
+        document.getElementById('dayEnd' + i).value = common.end;
+        document.getElementById('dayBreak' + i).value = common.brk;
+      }
+    }
+  }
+  applyWeekdayScheduleVisibility();
 }
 
 // ────────────────────────────────────────────────
@@ -1547,6 +1652,10 @@ function getCurrentInputs() {
   return {
     businessName:gv('businessName'), checkDate:gv('checkDate'), specialMeasure:gc('specialMeasure'),
     startTime:gv('startTime'), endTime:gv('endTime'), breakTime:gv('breakTime'),
+    useWeekdaySchedule:gc('useWeekdaySchedule'),
+    daySchedule: Array.from({length:7}, (_,i) => ({
+      start: gv('dayStart'+i), end: gv('dayEnd'+i), break: gv('dayBreak'+i)
+    })),
     s36agreement:gv('s36agreement'), monthlyOT:gv('monthlyOT'), annualOT:gv('annualOT'),
     specialClause:gv('specialClause'), specialMonthlyOT:gv('specialMonthlyOT'), specialAnnualOT:gv('specialAnnualOT'),
     breakException:gv('breakException'),
@@ -1658,6 +1767,16 @@ function restoreCheck(inputs) {
   if (!inputs) return;
   sv('businessName',inputs.businessName); sv('checkDate',inputs.checkDate); sc('specialMeasure',inputs.specialMeasure);
   sv('startTime',inputs.startTime); sv('endTime',inputs.endTime); sv('breakTime',inputs.breakTime);
+  document.getElementById('useWeekdaySchedule').checked = !!inputs.useWeekdaySchedule;
+  {
+    const ds = Array.isArray(inputs.daySchedule) ? inputs.daySchedule : [];
+    for (let i = 0; i < 7; i++) {
+      const d = ds[i] || {};
+      document.getElementById('dayStart'+i).value = d.start || '';
+      document.getElementById('dayEnd'+i).value   = d.end   || '';
+      document.getElementById('dayBreak'+i).value = d.break || '';
+    }
+  }
   sv('s36agreement',inputs.s36agreement); sv('monthlyOT',inputs.monthlyOT); sv('annualOT',inputs.annualOT);
   sv('specialClause',inputs.specialClause); sv('specialMonthlyOT',inputs.specialMonthlyOT); sv('specialAnnualOT',inputs.specialAnnualOT);
   sv('breakException',inputs.breakException);
@@ -1672,7 +1791,7 @@ function restoreCheck(inputs) {
   sv('prefecture',inputs.prefecture); sv('minWage',inputs.minWage);
   sv('wageType',inputs.wageType); sv('monthlySalary',inputs.monthlySalary); sv('fixedOT',inputs.fixedOT); sv('fixedOTHours',inputs.fixedOTHours);
   sv('dailySalary',inputs.dailySalary); sv('hourlySalary',inputs.hourlySalary);
-  showFlexDetails(); showPartTimeFields(); showWageFields(); updateWeekdayStyle();
+  showFlexDetails(); showPartTimeFields(); showWageFields(); updateWeekdayStyle(); applyWeekdayScheduleVisibility();
   recalcAll(); saveAll();
   closeHistoryModal();
   showToast('読み込みました：' + (inputs.businessName || '（名称なし）'));
@@ -1721,6 +1840,10 @@ function saveAll() {
   const d = {
     businessName:gv('businessName'), checkDate:gv('checkDate'), specialMeasure:gc('specialMeasure'),
     startTime:gv('startTime'), endTime:gv('endTime'), breakTime:gv('breakTime'),
+    useWeekdaySchedule:gc('useWeekdaySchedule'),
+    daySchedule: Array.from({length:7}, (_,i) => ({
+      start: gv('dayStart'+i), end: gv('dayEnd'+i), break: gv('dayBreak'+i)
+    })),
     s36agreement:gv('s36agreement'), monthlyOT:gv('monthlyOT'), annualOT:gv('annualOT'),
     specialClause:gv('specialClause'), specialMonthlyOT:gv('specialMonthlyOT'), specialAnnualOT:gv('specialAnnualOT'),
     breakException:gv('breakException'),
@@ -1745,6 +1868,16 @@ function loadAll() {
   if (!d) return;
   sv('businessName',d.businessName); sv('checkDate',d.checkDate); sc('specialMeasure',d.specialMeasure);
   sv('startTime',d.startTime); sv('endTime',d.endTime); sv('breakTime',d.breakTime);
+  document.getElementById('useWeekdaySchedule').checked = !!d.useWeekdaySchedule;
+  {
+    const ds = Array.isArray(d.daySchedule) ? d.daySchedule : [];
+    for (let i = 0; i < 7; i++) {
+      const day = ds[i] || {};
+      document.getElementById('dayStart'+i).value = day.start || '';
+      document.getElementById('dayEnd'+i).value   = day.end   || '';
+      document.getElementById('dayBreak'+i).value = day.break || '';
+    }
+  }
   sv('s36agreement',d.s36agreement); sv('monthlyOT',d.monthlyOT); sv('annualOT',d.annualOT);
   sv('specialClause',d.specialClause); sv('specialMonthlyOT',d.specialMonthlyOT); sv('specialAnnualOT',d.specialAnnualOT);
   sv('breakException',d.breakException);
@@ -1760,6 +1893,7 @@ function loadAll() {
   sv('wageType',d.wageType); sv('monthlySalary',d.monthlySalary); sv('fixedOT',d.fixedOT); sv('fixedOTHours',d.fixedOTHours);
   sv('dailySalary',d.dailySalary); sv('hourlySalary',d.hourlySalary);
   showWageFields();
+  applyWeekdayScheduleVisibility();
 }
 
 function resetAll() {
@@ -1778,6 +1912,7 @@ document.addEventListener('DOMContentLoaded', () => {
   showPartTimeFields();
   showWageFields();
   updateWeekdayStyle();
+  applyWeekdayScheduleVisibility();
   recalcAll();
   initFirebase();
 });
