@@ -278,6 +278,21 @@ def build_check_sheet(b):
     b.cb('dailyH', '1日の所定労働時間（時間）', f'={b.ref("dailyMin")}/60', fmt='0.00',
          narration=f'=TEXT({b.ref("dailyH")},"0.00")&"時間"')
 
+    b.inp('useWeekday', '曜日ごとに設定する', 'いいえ', choices=['はい', 'いいえ'],
+          note='「はい」で下の曜日別入力を使用します（未入力の間も安全に共通値へフォールバック）')
+
+    wd_sched_labels = ['月', '火', '水', '木', '金', '土', '日']
+    for idx, day in enumerate(wd_sched_labels):
+        b.inp(f'dayStart{idx}', f'{day}曜日 始業時刻', 9/24, fmt='h:mm')
+        b.inp(f'dayEnd{idx}', f'{day}曜日 終業時刻', 18/24, fmt='h:mm')
+        b.inp(f'dayBreak{idx}', f'{day}曜日 休憩時間（分）', 60)
+        b.reserve(f'dayMin{idx}')
+        b.cb(f'dayMin{idx}', f'{day}曜日 有効な所定労働時間（分）',
+             f'=IF({b.ref("useWeekday")}="はい",'
+             f'MAX(0,(IF({b.ref(f"dayEnd{idx}")}<{b.ref(f"dayStart{idx}")},{b.ref(f"dayEnd{idx}")}+1,{b.ref(f"dayEnd{idx}")})-{b.ref(f"dayStart{idx}")})*24*60-{b.ref(f"dayBreak{idx}")}),'
+             f'{b.ref("dailyMin")})', fmt='0',
+             narration=f'=IF({b.ref("useWeekday")}="はい","曜日別: "&TEXT({b.ref(f"dayMin{idx}")}/60,"0.00")&"時間","共通値を使用")')
+
     wd_labels = ['月', '火', '水', '木', '金', '土', '日']
     wd_defaults = ['いいえ', 'いいえ', 'いいえ', 'いいえ', 'いいえ', 'はい', 'はい']
     for idx, (day, dflt) in enumerate(zip(wd_labels, wd_defaults)):
