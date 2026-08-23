@@ -949,7 +949,7 @@ function calcS1() {
     return { i, name: dnames[i], sched, min };
   });
   const wMin = perDay.reduce((s,d) => s + d.min, 0);
-  const avgMin = perDay.length ? wMin / perDay.length : 0;
+  const avgMin = getAvgDailyMin();
   const overDays = perDay.filter(d => d.min/60 > 8);
 
   const j11 = overDays.length ? 'ng' : 'ok';
@@ -1767,11 +1767,16 @@ function restoreCheck(inputs) {
   if (!inputs) return;
   sv('businessName',inputs.businessName); sv('checkDate',inputs.checkDate); sc('specialMeasure',inputs.specialMeasure);
   sv('startTime',inputs.startTime); sv('endTime',inputs.endTime); sv('breakTime',inputs.breakTime);
-  sc('useWeekdaySchedule', inputs.useWeekdaySchedule);
-  if (Array.isArray(inputs.daySchedule)) inputs.daySchedule.forEach((d,i) => {
-    if (!d) return;
-    sv('dayStart'+i, d.start); sv('dayEnd'+i, d.end); sv('dayBreak'+i, d.break);
-  });
+  document.getElementById('useWeekdaySchedule').checked = !!inputs.useWeekdaySchedule;
+  {
+    const ds = Array.isArray(inputs.daySchedule) ? inputs.daySchedule : [];
+    for (let i = 0; i < 7; i++) {
+      const d = ds[i] || {};
+      document.getElementById('dayStart'+i).value = d.start || '';
+      document.getElementById('dayEnd'+i).value   = d.end   || '';
+      document.getElementById('dayBreak'+i).value = d.break || '';
+    }
+  }
   sv('s36agreement',inputs.s36agreement); sv('monthlyOT',inputs.monthlyOT); sv('annualOT',inputs.annualOT);
   sv('specialClause',inputs.specialClause); sv('specialMonthlyOT',inputs.specialMonthlyOT); sv('specialAnnualOT',inputs.specialAnnualOT);
   sv('breakException',inputs.breakException);
@@ -1863,11 +1868,16 @@ function loadAll() {
   if (!d) return;
   sv('businessName',d.businessName); sv('checkDate',d.checkDate); sc('specialMeasure',d.specialMeasure);
   sv('startTime',d.startTime); sv('endTime',d.endTime); sv('breakTime',d.breakTime);
-  sc('useWeekdaySchedule', d.useWeekdaySchedule);
-  if (Array.isArray(d.daySchedule)) d.daySchedule.forEach((day,i) => {
-    if (!day) return;
-    sv('dayStart'+i, day.start); sv('dayEnd'+i, day.end); sv('dayBreak'+i, day.break);
-  });
+  document.getElementById('useWeekdaySchedule').checked = !!d.useWeekdaySchedule;
+  {
+    const ds = Array.isArray(d.daySchedule) ? d.daySchedule : [];
+    for (let i = 0; i < 7; i++) {
+      const day = ds[i] || {};
+      document.getElementById('dayStart'+i).value = day.start || '';
+      document.getElementById('dayEnd'+i).value   = day.end   || '';
+      document.getElementById('dayBreak'+i).value = day.break || '';
+    }
+  }
   sv('s36agreement',d.s36agreement); sv('monthlyOT',d.monthlyOT); sv('annualOT',d.annualOT);
   sv('specialClause',d.specialClause); sv('specialMonthlyOT',d.specialMonthlyOT); sv('specialAnnualOT',d.specialAnnualOT);
   sv('breakException',d.breakException);
