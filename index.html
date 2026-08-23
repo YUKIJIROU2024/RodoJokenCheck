@@ -63,6 +63,12 @@
     .weekday-label:hover { background: #eef2f7; }
     .weekday-label input[type="checkbox"] { width: 14px; height: 14px; }
     .weekday-label.is-holiday { background: #fef3c7; border-color: #f0a500; }
+    .weekday-schedule-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+    .weekday-schedule-table th, .weekday-schedule-table td { border: 1px solid #cbd5e0; padding: 6px 8px; text-align: left; }
+    .weekday-schedule-table th { background: #eef2f7; font-weight: bold; }
+    .weekday-schedule-table input[type="time"], .weekday-schedule-table input[type="number"] { width: 100%; box-sizing: border-box; padding: 4px 6px; border: 1px solid #cbd5e0; border-radius: 4px; }
+    .weekday-schedule-table tr.is-holiday-row { background: #fef3c7; }
+    .weekday-schedule-table tr.is-holiday-row input { background: #f3f4f6; color: #9ca3af; }
 
     .check-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; background: white; }
     .check-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -232,6 +238,28 @@
     </div>
     <div class="info-box">
       週の就業日数はタブ「④ 休日」で設定した休日から自動計算されます。変形労働時間制を採用する場合は「⑤ 変形労働時間制」タブも設定してください。
+    </div>
+    <div class="form-row" style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:bold;color:#4a5568;cursor:pointer">
+        <input type="checkbox" id="useWeekdaySchedule" onchange="toggleWeekdaySchedule(); recalcAll(); saveAll()">
+        曜日ごとに所定労働時間を設定する
+      </label>
+    </div>
+    <div id="weekdayScheduleTable" style="display:none; margin:6px 0 16px">
+      <table class="weekday-schedule-table">
+        <thead>
+          <tr><th style="width:60px">曜日</th><th>始業</th><th>終業</th><th>休憩（分）</th></tr>
+        </thead>
+        <tbody>
+          <tr id="dayRow0"><td>月</td><td><input type="time" id="dayStart0" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd0" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak0" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow1"><td>火</td><td><input type="time" id="dayStart1" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd1" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak1" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow2"><td>水</td><td><input type="time" id="dayStart2" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd2" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak2" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow3"><td>木</td><td><input type="time" id="dayStart3" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd3" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak3" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow4"><td>金</td><td><input type="time" id="dayStart4" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd4" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak4" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow5"><td>土</td><td><input type="time" id="dayStart5" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd5" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak5" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+          <tr id="dayRow6"><td>日</td><td><input type="time" id="dayStart6" oninput="recalcAll(); saveAll()"></td><td><input type="time" id="dayEnd6" oninput="recalcAll(); saveAll()"></td><td><input type="number" id="dayBreak6" min="0" max="480" oninput="recalcAll(); saveAll()"></td></tr>
+        </tbody>
+      </table>
     </div>
     <div class="check-item">
       <div class="check-header">
@@ -825,6 +853,43 @@ function getDailyMin() {
   const brk = parseInt(document.getElementById('breakTime').value) || 0;
   if (end < start) end += 24 * 60; // overnight
   return Math.max(0, end - start - brk);
+}
+// NOTE: getDailyMin() above is the pre-weekday-schedule accessor. It is
+// still used by calcS1/calcS3/calcS8 until Tasks 2-4 migrate them onto
+// getDailyMinFor(i) below; it will be deleted once nothing calls it.
+
+function getWorkDayIndices() {
+  const r = [];
+  for (let i = 0; i < 7; i++) if (!document.getElementById('wd' + i).checked) r.push(i);
+  return r;
+}
+function getDaySchedule(i) {
+  if (document.getElementById('useWeekdaySchedule').checked) {
+    return {
+      start: document.getElementById('dayStart' + i).value,
+      end:   document.getElementById('dayEnd' + i).value,
+      break: parseInt(document.getElementById('dayBreak' + i).value) || 0
+    };
+  }
+  return {
+    start: document.getElementById('startTime').value,
+    end:   document.getElementById('endTime').value,
+    break: parseInt(document.getElementById('breakTime').value) || 0
+  };
+}
+function getDailyMinFor(i) {
+  const sched = getDaySchedule(i);
+  const start = timeToMin(sched.start);
+  let end = timeToMin(sched.end);
+  if (end < start) end += 24 * 60; // overnight
+  return Math.max(0, end - start - sched.break);
+}
+function getWeeklyMinutes() {
+  return getWorkDayIndices().reduce((sum, i) => sum + getDailyMinFor(i), 0);
+}
+function getAvgDailyMin() {
+  const days = getWorkDayIndices();
+  return days.length > 0 ? getWeeklyMinutes() / days.length : 0;
 }
 function getWeeklyWorkDays() {
   let off = 0;
@@ -1483,8 +1548,39 @@ function showWageFields() {
   document.getElementById('wageHourly').style.display  = wt==='hourly'  ? 'block' : 'none';
 }
 function updateWeekdayStyle() {
-  for (let i=0;i<7;i++)
-    document.getElementById('wdLabel'+i).classList.toggle('is-holiday', document.getElementById('wd'+i).checked);
+  for (let i=0;i<7;i++) {
+    const isHoliday = document.getElementById('wd'+i).checked;
+    document.getElementById('wdLabel'+i).classList.toggle('is-holiday', isHoliday);
+    const row = document.getElementById('dayRow'+i);
+    if (row) {
+      row.classList.toggle('is-holiday-row', isHoliday);
+      document.getElementById('dayStart'+i).disabled = isHoliday;
+      document.getElementById('dayEnd'+i).disabled = isHoliday;
+      document.getElementById('dayBreak'+i).disabled = isHoliday;
+    }
+  }
+}
+function applyWeekdayScheduleVisibility() {
+  document.getElementById('weekdayScheduleTable').style.display =
+    document.getElementById('useWeekdaySchedule').checked ? 'block' : 'none';
+}
+function toggleWeekdaySchedule() {
+  if (document.getElementById('useWeekdaySchedule').checked) {
+    const common = {
+      start: document.getElementById('startTime').value,
+      end:   document.getElementById('endTime').value,
+      brk:   document.getElementById('breakTime').value
+    };
+    for (let i = 0; i < 7; i++) {
+      const s = document.getElementById('dayStart' + i);
+      if (!s.value) {
+        s.value = common.start;
+        document.getElementById('dayEnd' + i).value = common.end;
+        document.getElementById('dayBreak' + i).value = common.brk;
+      }
+    }
+  }
+  applyWeekdayScheduleVisibility();
 }
 
 // ────────────────────────────────────────────────
@@ -1672,7 +1768,7 @@ function restoreCheck(inputs) {
   sv('prefecture',inputs.prefecture); sv('minWage',inputs.minWage);
   sv('wageType',inputs.wageType); sv('monthlySalary',inputs.monthlySalary); sv('fixedOT',inputs.fixedOT); sv('fixedOTHours',inputs.fixedOTHours);
   sv('dailySalary',inputs.dailySalary); sv('hourlySalary',inputs.hourlySalary);
-  showFlexDetails(); showPartTimeFields(); showWageFields(); updateWeekdayStyle();
+  showFlexDetails(); showPartTimeFields(); showWageFields(); updateWeekdayStyle(); applyWeekdayScheduleVisibility();
   recalcAll(); saveAll();
   closeHistoryModal();
   showToast('読み込みました：' + (inputs.businessName || '（名称なし）'));
@@ -1760,6 +1856,7 @@ function loadAll() {
   sv('wageType',d.wageType); sv('monthlySalary',d.monthlySalary); sv('fixedOT',d.fixedOT); sv('fixedOTHours',d.fixedOTHours);
   sv('dailySalary',d.dailySalary); sv('hourlySalary',d.hourlySalary);
   showWageFields();
+  applyWeekdayScheduleVisibility();
 }
 
 function resetAll() {
@@ -1778,6 +1875,7 @@ document.addEventListener('DOMContentLoaded', () => {
   showPartTimeFields();
   showWageFields();
   updateWeekdayStyle();
+  applyWeekdayScheduleVisibility();
   recalcAll();
   initFirebase();
 });
