@@ -855,8 +855,8 @@ function getDailyMin() {
   return Math.max(0, end - start - brk);
 }
 // NOTE: getDailyMin() above is the pre-weekday-schedule accessor. It is
-// still used by calcS1/calcS3/calcS8 until Tasks 2-4 migrate them onto
-// getDailyMinFor(i) below; it will be deleted once nothing calls it.
+// still used by calcS8 until Task 4 migrates it onto getDailyMinFor(i)
+// below; it will be deleted once nothing calls it.
 
 function getWorkDayIndices() {
   const r = [];
@@ -1048,18 +1048,30 @@ function calcS2() {
 // Section ③ 休憩
 // ────────────────────────────────────────────────
 function calcS3() {
-  const dm  = getDailyMin();
-  const brk = parseInt(document.getElementById('breakTime').value) || 0;
+  const dnames = ['月','火','水','木','金','土','日'];
   const exc = document.getElementById('breakException').value;
-  let req = 0;
-  if (dm > 480) req = 60;
-  else if (dm > 360) req = 45;
+  const workDays = getWorkDayIndices();
 
-  const j31 = brk >= req ? 'ok' : 'ng';
+  const perDay = workDays.map(i => {
+    const sched = getDaySchedule(i);
+    const min = getDailyMinFor(i);
+    let req = 0;
+    if (min > 480) req = 60;
+    else if (min > 360) req = 45;
+    return { i, name: dnames[i], min, brk: sched.break, req, ok: sched.break >= req };
+  });
+  const shortDays = perDay.filter(d => !d.ok);
+
+  const j31 = shortDays.length ? 'ng' : 'ok';
   setJ('j3-1', j31);
-  setP('proc3-1', req === 0
-    ? '1日の労働時間: ' + minToStr(dm) + '（6時間以下）\n→ 法律上の休憩付与義務なし\n判定: ○'
-    : '1日の労働時間: ' + minToStr(dm) + '\n→ ' + (dm>480 ? '8時間超 → 60分以上' : '6時間超8時間以下 → 45分以上') + 'の休憩が必要（労基法 第34条1項）\n設定休憩: ' + brk + '分  必要休憩: ' + req + '分\n判  定: ' + (j31==='ok' ? '○ 基準内' : '✗ 休憩時間不足（' + req + '分以上必要）'));
+  const dayLines = perDay.map(d =>
+    d.name + ': 労働 ' + minToStr(d.min) + ' → 必要休憩 ' + (d.req === 0 ? '不要（6時間以下）' : d.req + '分以上') +
+    '  設定休憩 ' + d.brk + '分' + (d.ok ? '' : '（不足）')
+  ).join('\n');
+  setP('proc3-1',
+    (dayLines || '（就業日がありません）') + '\n\n' +
+    '法定基準: 6時間超→45分以上、8時間超→60分以上（労基法 第34条1項）\n' +
+    '判  定: ' + (j31==='ok' ? '○ 基準内' : '✗ ' + shortDays.map(d=>d.name).join('・') + '曜日の休憩時間不足'));
 
   setJ('j3-2', 'ok');
   setP('proc3-2',
