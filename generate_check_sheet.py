@@ -307,6 +307,14 @@ def build_check_sheet(b):
     b.cb('weeklyH', '週の所定労働時間（時間）', f'={b.ref("dailyH")}*{b.ref("weeklyWorkDays")}', fmt='0.00',
          narration=f'=TEXT({b.ref("dailyH")},"0.00")&"時間/日 × "&{b.ref("weeklyWorkDays")}&"日 = "&TEXT({b.ref("weeklyH")},"0.00")&"時間/週"')
 
+    max_parts = ','.join(
+        f'({b.ref(f"wd{d}")}="いいえ")*{b.ref(f"dayMin{d}")}' for d in range(7)
+    )
+    b.reserve('maxDailyH')
+    b.cb('maxDailyH', '就業日の中の最大1日所定労働時間（時間）',
+         f'=MAX({max_parts})/60', fmt='0.00',
+         narration=f'="就業日の最大: "&TEXT({b.ref("maxDailyH")},"0.00")&"時間"')
+
     b.inp('holidayType', '祝日の扱い', '休日扱い', choices=['休日扱い', '出勤日'])
     b.inp('addHolidays', '追加休日日数（週休・祝日以外）', 0, note='夏季・年末年始等')
     b.inp('holidayRate', '法定休日労働の割増率（%）', 35,
@@ -343,9 +351,15 @@ def build_check_sheet(b):
 
     # ── ① 労働時間 ───────────────────────────────────────────
     b.section_hdr('① 労働時間')
+    over_parts = ','.join(
+        f'IF(AND({xref(b,f"wd{d}")}="いいえ",{xref(b,f"dayMin{d}")}/60>8),"{wd_labels[d]}","")'
+        for d in range(7)
+    )
     b.judgment_row('j1_1', '1-1', '1日の所定労働時間',
-        f'=IF({b.ref("dailyH")}<=8,"○","✗")',
-        detail=f'="1日労働時間: "&TEXT({xref(b,"dailyH")},"0.00")&"時間（上限8時間）"')
+        f'=IF({b.ref("maxDailyH")}<=8,"○","✗")',
+        detail=f'=IF({xref(b,"maxDailyH")}<=8,'
+               f'"最大1日労働時間: "&TEXT({xref(b,"maxDailyH")},"0.00")&"時間（上限8時間）",'
+               f'"8時間超過曜日: "&_xlfn.TEXTJOIN("・",TRUE,{over_parts})&"曜日")')
     b.judgment_row('j1_2', '1-2', '週の所定労働時間',
         f'=IF({b.ref("weeklyH")}<={b.ref("weeklyLimit")},"○","✗")',
         detail=f'="週労働時間: "&TEXT({xref(b,"weeklyH")},"0.00")&"時間（上限"&{xref(b,"weeklyLimit")}&"時間）"')
