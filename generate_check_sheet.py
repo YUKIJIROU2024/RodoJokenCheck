@@ -397,15 +397,25 @@ def build_check_sheet(b):
     # ── ③ 休憩 ───────────────────────────────────────────────
     b.section_hdr('③ 休憩')
     b.inp('breakException', '一斉付与 適用除外（労使協定）', 'なし', choices=['なし', 'あり'])
-    b.reserve('breakRequiredMin')
-    b.cb('breakRequiredMin', '必要休憩時間（分）',
-         f'=IF({b.ref("dailyMin")}>480,60,IF({b.ref("dailyMin")}>360,45,0))', fmt='0',
-         narration=f'=IF({b.ref("breakRequiredMin")}=0,"6時間以下 → 休憩付与義務なし",'
-                    f'IF({b.ref("dailyMin")}>480,"8時間超 → 60分以上必要","6時間超8時間以下 → 45分以上必要"))')
 
+    day_pass_parts = [
+        f'OR({b.ref(f"wd{d}")}="はい",'
+        f'IF({b.ref("useWeekday")}="はい",{b.ref(f"dayBreak{d}")},{b.ref("breakTime")})'
+        f'>=IF({b.ref(f"dayMin{d}")}>480,60,IF({b.ref(f"dayMin{d}")}>360,45,0)))'
+        for d in range(7)
+    ]
+    fail_parts = ','.join(
+        f'IF(AND({xref(b,f"wd{d}")}<>"はい",'
+        f'IF({xref(b,"useWeekday")}="はい",{xref(b,f"dayBreak{d}")},{xref(b,"breakTime")})'
+        f'<IF({xref(b,f"dayMin{d}")}>480,60,IF({xref(b,f"dayMin{d}")}>360,45,0))),'
+        f'"{wd_labels[d]}","")'
+        for d in range(7)
+    )
+    b.reserve('j3_1')
     b.judgment_row('j3_1', '3-1', '休憩時間の長さ',
-        f'=IF({b.ref("breakRequiredMin")}=0,"○",IF({b.ref("breakTime")}>={b.ref("breakRequiredMin")},"○","✗"))',
-        detail=f'="設定休憩: "&{xref(b,"breakTime")}&"分 / 必要休憩: "&{xref(b,"breakRequiredMin")}&"分"')
+        f'=IF(AND({",".join(day_pass_parts)}),"○","✗")',
+        detail=f'=IF({xref(b,"j3_1")}="○","各曜日の必要休憩を満たしています",'
+               f'"休憩不足曜日: "&_xlfn.TEXTJOIN("・",TRUE,{fail_parts})&"曜日")')
     b.judgment_row('j3_2', '3-2', '休憩の一斉付与', '="○"',
         detail=f'="適用除外: "&{xref(b,"breakException")}')
 
