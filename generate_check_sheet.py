@@ -274,10 +274,6 @@ def build_check_sheet(b):
     b.cb('dailyMin', '1日の所定労働時間（分）',
          f'=MAX(0,{b.ref("endMin")}-{b.ref("startMin")}-{b.ref("breakTime")})', fmt='0',
          narration=f'=({b.ref("endMin")}-{b.ref("startMin")})&"分 − 休憩"&{b.ref("breakTime")}&"分 = "&{b.ref("dailyMin")}&"分"')
-    b.reserve('dailyH')
-    b.cb('dailyH', '1日の所定労働時間（時間）', f'={b.ref("dailyMin")}/60', fmt='0.00',
-         narration=f'=TEXT({b.ref("dailyH")},"0.00")&"時間"')
-
     b.inp('useWeekday', '曜日ごとに設定する', 'いいえ', choices=['はい', 'いいえ'],
           note='「はい」で下の曜日別入力を使用します（未入力の間も安全に共通値へフォールバック）')
 
@@ -317,6 +313,13 @@ def build_check_sheet(b):
     b.cb('maxDailyH', '就業日の中の最大1日所定労働時間（時間）',
          f'=MAX({max_parts})/60', fmt='0.00',
          narration=f'="就業日の最大: "&TEXT({b.ref("maxDailyH")},"0.00")&"時間"')
+
+    b.reserve('dailyH')
+    b.cb('dailyH', '1日の所定労働時間（平均・時間）',
+         f'=IF({b.ref("weeklyWorkDays")}>0,{b.ref("weeklyH")}/{b.ref("weeklyWorkDays")},0)', fmt='0.00',
+         narration=f'=IF({b.ref("weeklyWorkDays")}>0,'
+                    f'TEXT({b.ref("weeklyH")},"0.00")&"時間/週 ÷ "&{b.ref("weeklyWorkDays")}&"日 = "&TEXT({b.ref("dailyH")},"0.00")&"時間/日（平均）",'
+                    f'"就業日なし")')
 
     b.inp('holidayType', '祝日の扱い', '休日扱い', choices=['休日扱い', '出勤日'])
     b.inp('addHolidays', '追加休日日数（週休・祝日以外）', 0, note='夏季・年末年始等')
