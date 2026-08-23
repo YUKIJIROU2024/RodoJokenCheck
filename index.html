@@ -847,17 +847,6 @@ function minToH(m) { return (m / 60).toFixed(2); }
 // ────────────────────────────────────────────────
 // Core calculations
 // ────────────────────────────────────────────────
-function getDailyMin() {
-  const start = timeToMin(document.getElementById('startTime').value);
-  let end = timeToMin(document.getElementById('endTime').value);
-  const brk = parseInt(document.getElementById('breakTime').value) || 0;
-  if (end < start) end += 24 * 60; // overnight
-  return Math.max(0, end - start - brk);
-}
-// NOTE: getDailyMin() above is the pre-weekday-schedule accessor. It is
-// still used by calcS8 until Task 4 migrates it onto getDailyMinFor(i)
-// below; it will be deleted once nothing calls it.
-
 function getWorkDayIndices() {
   const r = [];
   for (let i = 0; i < 7; i++) if (!document.getElementById('wd' + i).checked) r.push(i);
@@ -1362,8 +1351,7 @@ function onPrefectureChange() {
 function calcS8() {
   const minWage = parseFloat(document.getElementById('minWage').value) || 0;
   const wageType = document.getElementById('wageType').value;
-  const dm = getDailyMin();
-  const dailyH = dm / 60;
+  const dailyH = getAvgDailyMin() / 60;
   const pref = document.getElementById('prefecture').value || '（未選択）';
 
   // hide optional check items by default
@@ -1508,7 +1496,7 @@ function calcS8() {
       '適用最低賃金: ' + pref + ' ' + minWage.toLocaleString() + '円/時間\n' +
       '日給: ' + daily.toLocaleString() + '円\n\n' +
       '【時間換算額の計算】\n' +
-      '  1日の所定労働時間: ' + dailyH.toFixed(2) + '時間\n' +
+      '  平均1日所定労働時間: ' + dailyH.toFixed(2) + '時間\n' +
       '  ' + daily.toLocaleString() + '円 ÷ ' + dailyH.toFixed(2) + '時間 = ' + hourlyRate.toFixed(2) + '円/時間\n\n' +
       '最低賃金:   ' + minWage.toLocaleString() + '円/時間\n' +
       '差額:       ' + (diff >= 0 ? '+' : '') + diff.toFixed(2) + '円/時間\n' +
