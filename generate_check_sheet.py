@@ -271,11 +271,15 @@ def build_check_sheet(b):
          fmt='0',
          narration=f'=IF({b.ref("endTime")}<{b.ref("startTime")},"翌日にかかる勤務として計算","通常勤務")')
     b.reserve('dailyMin')
+    b.reserve('useWeekday')
     b.cb('dailyMin', '1日の所定労働時間（分）',
          f'=MAX(0,{b.ref("endMin")}-{b.ref("startMin")}-{b.ref("breakTime")})', fmt='0',
-         narration=f'=({b.ref("endMin")}-{b.ref("startMin")})&"分 − 休憩"&{b.ref("breakTime")}&"分 = "&{b.ref("dailyMin")}&"分"')
+         narration=f'=IF({b.ref("useWeekday")}="はい","※曜日別設定を使用中のため、この共通値は判定に使われません",'
+                    f'({b.ref("endMin")}-{b.ref("startMin")})&"分 − 休憩"&{b.ref("breakTime")}&"分 = "&{b.ref("dailyMin")}&"分")')
     b.inp('useWeekday', '曜日ごとに設定する', 'いいえ', choices=['はい', 'いいえ'],
           note='「はい」で下の曜日別入力を使用します（未入力の間も安全に共通値へフォールバック）')
+
+    b.sep_row('── 曜日別スケジュール（「曜日ごとに設定する」＝はい のときのみ有効） ──')
 
     wd_sched_labels = ['月', '火', '水', '木', '金', '土', '日']
     for idx, day in enumerate(wd_sched_labels):
