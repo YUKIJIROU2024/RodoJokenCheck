@@ -1652,6 +1652,10 @@ function getCurrentInputs() {
   return {
     businessName:gv('businessName'), checkDate:gv('checkDate'), specialMeasure:gc('specialMeasure'),
     startTime:gv('startTime'), endTime:gv('endTime'), breakTime:gv('breakTime'),
+    useWeekdaySchedule:gc('useWeekdaySchedule'),
+    daySchedule: Array.from({length:7}, (_,i) => ({
+      start: gv('dayStart'+i), end: gv('dayEnd'+i), break: gv('dayBreak'+i)
+    })),
     s36agreement:gv('s36agreement'), monthlyOT:gv('monthlyOT'), annualOT:gv('annualOT'),
     specialClause:gv('specialClause'), specialMonthlyOT:gv('specialMonthlyOT'), specialAnnualOT:gv('specialAnnualOT'),
     breakException:gv('breakException'),
@@ -1763,6 +1767,11 @@ function restoreCheck(inputs) {
   if (!inputs) return;
   sv('businessName',inputs.businessName); sv('checkDate',inputs.checkDate); sc('specialMeasure',inputs.specialMeasure);
   sv('startTime',inputs.startTime); sv('endTime',inputs.endTime); sv('breakTime',inputs.breakTime);
+  sc('useWeekdaySchedule', inputs.useWeekdaySchedule);
+  if (Array.isArray(inputs.daySchedule)) inputs.daySchedule.forEach((d,i) => {
+    if (!d) return;
+    sv('dayStart'+i, d.start); sv('dayEnd'+i, d.end); sv('dayBreak'+i, d.break);
+  });
   sv('s36agreement',inputs.s36agreement); sv('monthlyOT',inputs.monthlyOT); sv('annualOT',inputs.annualOT);
   sv('specialClause',inputs.specialClause); sv('specialMonthlyOT',inputs.specialMonthlyOT); sv('specialAnnualOT',inputs.specialAnnualOT);
   sv('breakException',inputs.breakException);
@@ -1826,6 +1835,10 @@ function saveAll() {
   const d = {
     businessName:gv('businessName'), checkDate:gv('checkDate'), specialMeasure:gc('specialMeasure'),
     startTime:gv('startTime'), endTime:gv('endTime'), breakTime:gv('breakTime'),
+    useWeekdaySchedule:gc('useWeekdaySchedule'),
+    daySchedule: Array.from({length:7}, (_,i) => ({
+      start: gv('dayStart'+i), end: gv('dayEnd'+i), break: gv('dayBreak'+i)
+    })),
     s36agreement:gv('s36agreement'), monthlyOT:gv('monthlyOT'), annualOT:gv('annualOT'),
     specialClause:gv('specialClause'), specialMonthlyOT:gv('specialMonthlyOT'), specialAnnualOT:gv('specialAnnualOT'),
     breakException:gv('breakException'),
@@ -1850,6 +1863,11 @@ function loadAll() {
   if (!d) return;
   sv('businessName',d.businessName); sv('checkDate',d.checkDate); sc('specialMeasure',d.specialMeasure);
   sv('startTime',d.startTime); sv('endTime',d.endTime); sv('breakTime',d.breakTime);
+  sc('useWeekdaySchedule', d.useWeekdaySchedule);
+  if (Array.isArray(d.daySchedule)) d.daySchedule.forEach((day,i) => {
+    if (!day) return;
+    sv('dayStart'+i, day.start); sv('dayEnd'+i, day.end); sv('dayBreak'+i, day.break);
+  });
   sv('s36agreement',d.s36agreement); sv('monthlyOT',d.monthlyOT); sv('annualOT',d.annualOT);
   sv('specialClause',d.specialClause); sv('specialMonthlyOT',d.specialMonthlyOT); sv('specialAnnualOT',d.specialAnnualOT);
   sv('breakException',d.breakException);
