@@ -271,12 +271,27 @@ def build_check_sheet(b):
          fmt='0',
          narration=f'=IF({b.ref("endTime")}<{b.ref("startTime")},"翌日にかかる勤務として計算","通常勤務")')
     b.reserve('dailyMin')
+    b.reserve('useWeekday')
     b.cb('dailyMin', '1日の所定労働時間（分）',
          f'=MAX(0,{b.ref("endMin")}-{b.ref("startMin")}-{b.ref("breakTime")})', fmt='0',
-         narration=f'=({b.ref("endMin")}-{b.ref("startMin")})&"分 − 休憩"&{b.ref("breakTime")}&"分 = "&{b.ref("dailyMin")}&"分"')
-    b.reserve('dailyH')
-    b.cb('dailyH', '1日の所定労働時間（時間）', f'={b.ref("dailyMin")}/60', fmt='0.00',
-         narration=f'=TEXT({b.ref("dailyH")},"0.00")&"時間"')
+         narration=f'=IF({b.ref("useWeekday")}="はい","※曜日別設定を使用中のため、この共通値は判定に使われません",'
+                    f'({b.ref("endMin")}-{b.ref("startMin")})&"分 − 休憩"&{b.ref("breakTime")}&"分 = "&{b.ref("dailyMin")}&"分")')
+    b.inp('useWeekday', '曜日ごとに設定する', 'いいえ', choices=['はい', 'いいえ'],
+          note='「はい」で下の曜日別入力を使用します（未入力の間も安全に共通値へフォールバック）')
+
+    b.sep_row('── 曜日別スケジュール（「曜日ごとに設定する」＝はい のときのみ有効） ──')
+
+    wd_sched_labels = ['月', '火', '水', '木', '金', '土', '日']
+    for idx, day in enumerate(wd_sched_labels):
+        b.inp(f'dayStart{idx}', f'{day}曜日 始業時刻', 9/24, fmt='h:mm')
+        b.inp(f'dayEnd{idx}', f'{day}曜日 終業時刻', 18/24, fmt='h:mm')
+        b.inp(f'dayBreak{idx}', f'{day}曜日 休憩時間（分）', 60)
+        b.reserve(f'dayMin{idx}')
+        b.cb(f'dayMin{idx}', f'{day}曜日 有効な所定労働時間（分）',
+             f'=IF({b.ref("useWeekday")}="はい",'
+             f'MAX(0,(IF({b.ref(f"dayEnd{idx}")}<{b.ref(f"dayStart{idx}")},{b.ref(f"dayEnd{idx}")}+1,{b.ref(f"dayEnd{idx}")})-{b.ref(f"dayStart{idx}")})*24*60-{b.ref(f"dayBreak{idx}")}),'
+             f'{b.ref("dailyMin")})', fmt='0',
+             narration=f'=IF({b.ref("useWeekday")}="はい","曜日別: "&TEXT({b.ref(f"dayMin{idx}")}/60,"0.00")&"時間","共通値を使用")')
 
     wd_labels = ['月', '火', '水', '木', '金', '土', '日']
     wd_defaults = ['いいえ', 'いいえ', 'いいえ', 'いいえ', 'いいえ', 'はい', 'はい']
@@ -288,9 +303,27 @@ def build_check_sheet(b):
     b.cb('weeklyOffCount', '週休日数', f'={woc_parts}', fmt='0',
          narration=f'={b.ref("weeklyOffCount")}&"日/週"')
     b.cb('weeklyWorkDays', '週労働日数', f'=7-{b.ref("weeklyOffCount")}', fmt='0')
+    weekly_sum_parts = '+'.join(
+        f'({b.ref(f"wd{d}")}="いいえ")*{b.ref(f"dayMin{d}")}' for d in range(7)
+    )
     b.reserve('weeklyH')
-    b.cb('weeklyH', '週の所定労働時間（時間）', f'={b.ref("dailyH")}*{b.ref("weeklyWorkDays")}', fmt='0.00',
-         narration=f'=TEXT({b.ref("dailyH")},"0.00")&"時間/日 × "&{b.ref("weeklyWorkDays")}&"日 = "&TEXT({b.ref("weeklyH")},"0.00")&"時間/週"')
+    b.cb('weeklyH', '週の所定労働時間（時間）', f'=({weekly_sum_parts})/60', fmt='0.00',
+         narration=f'="就業日の所定労働時間合計 ÷ 60 = "&TEXT({b.ref("weeklyH")},"0.00")&"時間/週"')
+
+    max_parts = ','.join(
+        f'({b.ref(f"wd{d}")}="いいえ")*{b.ref(f"dayMin{d}")}' for d in range(7)
+    )
+    b.reserve('maxDailyH')
+    b.cb('maxDailyH', '就業日の中の最大1日所定労働時間（時間）',
+         f'=MAX({max_parts})/60', fmt='0.00',
+         narration=f'="就業日の最大: "&TEXT({b.ref("maxDailyH")},"0.00")&"時間"')
+
+    b.reserve('dailyH')
+    b.cb('dailyH', '1日の所定労働時間（平均・時間）',
+         f'=IF({b.ref("weeklyWorkDays")}>0,{b.ref("weeklyH")}/{b.ref("weeklyWorkDays")},0)', fmt='0.00',
+         narration=f'=IF({b.ref("weeklyWorkDays")}>0,'
+                    f'TEXT({b.ref("weeklyH")},"0.00")&"時間/週 ÷ "&{b.ref("weeklyWorkDays")}&"日 = "&TEXT({b.ref("dailyH")},"0.00")&"時間/日（平均）",'
+                    f'"就業日なし")')
 
     b.inp('holidayType', '祝日の扱い', '休日扱い', choices=['休日扱い', '出勤日'])
     b.inp('addHolidays', '追加休日日数（週休・祝日以外）', 0, note='夏季・年末年始等')
@@ -328,9 +361,15 @@ def build_check_sheet(b):
 
     # ── ① 労働時間 ───────────────────────────────────────────
     b.section_hdr('① 労働時間')
+    over_parts = ','.join(
+        f'IF(AND({xref(b,f"wd{d}")}="いいえ",{xref(b,f"dayMin{d}")}/60>8),"{wd_labels[d]}","")'
+        for d in range(7)
+    )
     b.judgment_row('j1_1', '1-1', '1日の所定労働時間',
-        f'=IF({b.ref("dailyH")}<=8,"○","✗")',
-        detail=f'="1日労働時間: "&TEXT({xref(b,"dailyH")},"0.00")&"時間（上限8時間）"')
+        f'=IF({b.ref("maxDailyH")}<=8,"○","✗")',
+        detail=f'=IF({xref(b,"maxDailyH")}<=8,'
+               f'"最大1日労働時間: "&TEXT({xref(b,"maxDailyH")},"0.00")&"時間（上限8時間）",'
+               f'"8時間超過曜日: "&_xlfn.TEXTJOIN("・",TRUE,{over_parts})&"曜日")')
     b.judgment_row('j1_2', '1-2', '週の所定労働時間',
         f'=IF({b.ref("weeklyH")}<={b.ref("weeklyLimit")},"○","✗")',
         detail=f'="週労働時間: "&TEXT({xref(b,"weeklyH")},"0.00")&"時間（上限"&{xref(b,"weeklyLimit")}&"時間）"')
@@ -362,15 +401,25 @@ def build_check_sheet(b):
     # ── ③ 休憩 ───────────────────────────────────────────────
     b.section_hdr('③ 休憩')
     b.inp('breakException', '一斉付与 適用除外（労使協定）', 'なし', choices=['なし', 'あり'])
-    b.reserve('breakRequiredMin')
-    b.cb('breakRequiredMin', '必要休憩時間（分）',
-         f'=IF({b.ref("dailyMin")}>480,60,IF({b.ref("dailyMin")}>360,45,0))', fmt='0',
-         narration=f'=IF({b.ref("breakRequiredMin")}=0,"6時間以下 → 休憩付与義務なし",'
-                    f'IF({b.ref("dailyMin")}>480,"8時間超 → 60分以上必要","6時間超8時間以下 → 45分以上必要"))')
 
+    day_pass_parts = [
+        f'OR({b.ref(f"wd{d}")}="はい",'
+        f'IF({b.ref("useWeekday")}="はい",{b.ref(f"dayBreak{d}")},{b.ref("breakTime")})'
+        f'>=IF({b.ref(f"dayMin{d}")}>480,60,IF({b.ref(f"dayMin{d}")}>360,45,0)))'
+        for d in range(7)
+    ]
+    fail_parts = ','.join(
+        f'IF(AND({xref(b,f"wd{d}")}<>"はい",'
+        f'IF({xref(b,"useWeekday")}="はい",{xref(b,f"dayBreak{d}")},{xref(b,"breakTime")})'
+        f'<IF({xref(b,f"dayMin{d}")}>480,60,IF({xref(b,f"dayMin{d}")}>360,45,0))),'
+        f'"{wd_labels[d]}","")'
+        for d in range(7)
+    )
+    b.reserve('j3_1')
     b.judgment_row('j3_1', '3-1', '休憩時間の長さ',
-        f'=IF({b.ref("breakRequiredMin")}=0,"○",IF({b.ref("breakTime")}>={b.ref("breakRequiredMin")},"○","✗"))',
-        detail=f'="設定休憩: "&{xref(b,"breakTime")}&"分 / 必要休憩: "&{xref(b,"breakRequiredMin")}&"分"')
+        f'=IF(AND({",".join(day_pass_parts)}),"○","✗")',
+        detail=f'=IF({xref(b,"j3_1")}="○","各曜日の必要休憩を満たしています",'
+               f'"休憩不足曜日: "&_xlfn.TEXTJOIN("・",TRUE,{fail_parts})&"曜日")')
     b.judgment_row('j3_2', '3-2', '休憩の一斉付与', '="○"',
         detail=f'="適用除外: "&{xref(b,"breakException")}')
 

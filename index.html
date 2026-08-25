@@ -782,7 +782,7 @@
       <div class="check-header">
         <div>
           <div class="check-label">8-3：固定残業代の適正額チェック</div>
-          <div class="check-sub">設定残業時間: 8-1の時間換算額×割増率</div>
+          <div class="check-sub">実務方式（1日8時間を境に通常単価／割増単価を按分）／現行方式（参考）も併記</div>
         </div>
         <span class="judgment" id="j8-3">－</span>
       </div>
@@ -1446,28 +1446,60 @@ function calcS8() {
         '判  定: ' + (j82==='ok' ? '○ 最低賃金以上' : '✗ 最低賃金未満（' + Math.abs(diffTotal).toFixed(2) + '円/時間 不足）'));
       result['8-2'] = j82;
 
-      // 8-3: fixed OT adequacy check — all set OT hours are paid at the overtime premium rate
+      // 8-3: fixed OT adequacy check
+      // パターン1（現行方式・参考）: 固定残業時間の全体を割増単価で計算（判定には使わない）。
+      // パターン2（実務方式・判定に使用）: 1日8時間に満たない所定労働時間の場合、
+      //   所定時間〜8時間の差分（ギャップ時間・月平均換算）は割増なしの通常単価、
+      //   8時間を超える部分だけ割増単価で計算する。dailyH>=8時間ならギャップ時間が0になり、
+      //   パターン1と同じ形（全時間×割増単価）に自然に帰着する。
       if (fixedOTHours > 0) {
         document.getElementById('check8-3').style.display = 'block';
         const otRate = parseFloat(document.getElementById('otRate').value) || 25;
         const premiumRate = 1 + otRate / 100;
 
-        const requiredAmount = fixedOTHours * rateBasic * premiumRate;
-
         const fixedOTHourlyRate = fixedOT / fixedOTHours;
-        const diff83 = fixedOT - requiredAmount;
-        const j83 = fixedOT >= requiredAmount ? 'ok' : 'ng';
+
+        // パターン1（現行方式・参考）— 8-1の時間換算額（未丸め rateBasic）をそのまま使用
+        const requiredAmount1 = fixedOTHours * rateBasic * premiumRate;
+
+        // パターン2（実務方式）
+        const hourlyRatePractical = Math.ceil(rateBasic);
+        const premiumRatePractical = Math.ceil(hourlyRatePractical * premiumRate);
+        const avgMonthlyWorkDays = annWorkDays / 12;
+        const gapHoursRaw = Math.max(0, 8 - dailyH) * avgMonthlyWorkDays;
+        const gapHours = Math.round((gapHoursRaw + Number.EPSILON) * 10) / 10;
+        const straightHours = Math.min(fixedOTHours, gapHours);
+        const premiumHours = Math.max(0, fixedOTHours - gapHours);
+        const straightAmount = Math.ceil(straightHours * hourlyRatePractical);
+        const premiumAmount = Math.ceil(premiumHours * premiumRatePractical);
+        const requiredAmount2 = straightAmount + premiumAmount;
+
+        const diff83 = fixedOT - requiredAmount2;
+        const j83 = fixedOT >= requiredAmount2 ? 'ok' : 'ng';
         setJ('j8-3', j83);
 
         let proc83 =
           '固定残業代（月額）: ' + fixedOT.toLocaleString() + '円\n' +
           '設定残業時間（月）: ' + fixedOTHours + '時間\n' +
           '固定残業代の時間単価: ' + fixedOT.toLocaleString() + '円 ÷ ' + fixedOTHours + '時間 = ' + fixedOTHourlyRate.toFixed(2) + '円/時間\n\n' +
-          '【必要な固定残業代額（8-1の時間換算額 ' + rateBasic.toFixed(2) + '円/時間 ベース）】\n' +
-          '設定残業時間: ' + fixedOTHours + '時間 × ' + rateBasic.toFixed(2) + '円 × ' + premiumRate.toFixed(2) + '（割増' + otRate + '%） = ' + Math.round(requiredAmount) + '円\n\n' +
-          '必要額合計:   ' + Math.round(requiredAmount) + '円/月\n' +
-          '固定残業代:   ' + fixedOT.toLocaleString() + '円/月\n' +
-          '差額:         ' + (diff83 >= 0 ? '+' : '') + Math.round(diff83) + '円/月\n' +
+
+          '【パターン1（現行方式・参考）：全時間を割増単価で計算】\n' +
+          '設定残業時間: ' + fixedOTHours + '時間 × ' + rateBasic.toFixed(2) + '円（8-1の時間換算額） × ' + premiumRate.toFixed(2) + '（割増' + otRate + '%） = ' + Math.round(requiredAmount1) + '円\n' +
+          '（参考額。判定には使用しません）\n\n' +
+
+          '【パターン2（実務方式）：1日8時間を境に通常単価／割増単価を按分】← 判定に使用\n' +
+          '時間単価（円未満切り上げ）: ' + rateBasic.toFixed(2) + '円 → ' + hourlyRatePractical + '円\n' +
+          '割増単価（円未満切り上げ）: ' + hourlyRatePractical + '円 × ' + premiumRate.toFixed(2) + '（割増' + otRate + '%） = ' + premiumRatePractical + '円\n' +
+          '平均月所定労働日数: ' + annWorkDays + '日 ÷ 12ヶ月 = ' + avgMonthlyWorkDays.toFixed(2) + '日\n' +
+          '1日の所定労働時間: ' + dailyH.toFixed(2) + '時間（1日8時間との差: ' + Math.max(0, 8 - dailyH).toFixed(2) + '時間）\n' +
+          'ギャップ時間（通常単価で足りる部分）: ' + Math.max(0, 8 - dailyH).toFixed(2) + '時間 × ' + avgMonthlyWorkDays.toFixed(2) + '日 = ' + gapHours.toFixed(1) + '時間\n' +
+          '  通常単価部分: ' + straightHours.toFixed(1) + '時間 × ' + hourlyRatePractical + '円 = ' + straightAmount.toLocaleString() + '円\n' +
+          '  割増単価部分: ' + premiumHours.toFixed(1) + '時間 × ' + premiumRatePractical + '円 = ' + premiumAmount.toLocaleString() + '円\n' +
+          '  パターン2 必要額: ' + straightAmount.toLocaleString() + '円 + ' + premiumAmount.toLocaleString() + '円 = ' + requiredAmount2.toLocaleString() + '円\n\n' +
+
+          '必要額合計（判定に使用・パターン2）: ' + requiredAmount2.toLocaleString() + '円/月\n' +
+          '固定残業代:                 ' + fixedOT.toLocaleString() + '円/月\n' +
+          '差額:                       ' + (diff83 >= 0 ? '+' : '') + Math.round(diff83) + '円/月\n' +
           '判  定: ' + (j83==='ok' ? '○ 最低賃金基準を満たす' : '✗ 不足（' + Math.round(Math.abs(diff83)) + '円/月 不足）');
         setP('proc8-3', proc83);
         result['8-3'] = j83;
