@@ -583,16 +583,52 @@ def build_check_sheet(b):
 
     b.sep_row('── 8-3：固定残業代の適正額チェック ──')
     b.reserve('fixedOTRequired')
-    b.cb('fixedOTRequired', '必要な固定残業代額（8-1の時間換算額ベース）',
+    b.cb('fixedOTRequired', '【パターン1・現行方式・参考】必要な固定残業代額',
          f'={b.ref("fixedOTHours")}*{b.ref("hourlyRateBasic")}*(1+{b.ref("otRate")}/100)', fmt='#,##0',
          narration=(f'=TEXT({b.ref("fixedOTHours")},"0.0")&"h × "&TEXT({b.ref("hourlyRateBasic")},"0.00")&"円 × "&'
-                    f'TEXT(1+{b.ref("otRate")}/100,"0.00")&"（割増"&{b.ref("otRate")}&"%） = "&TEXT({b.ref("fixedOTRequired")},"#,##0")&"円"'))
+                    f'TEXT(1+{b.ref("otRate")}/100,"0.00")&"（割増"&{b.ref("otRate")}&"%） = "&TEXT({b.ref("fixedOTRequired")},"#,##0")&"円（参考。判定には使用しません）"'))
+
+    b.sep_row('── パターン2・実務方式：1日8時間を境に通常単価／割増単価を按分（判定に使用） ──')
+    b.reserve('hourlyRatePractical')
+    b.cb('hourlyRatePractical', '時間単価（円未満切り上げ）',
+         f'=CEILING(MAX(0,{b.ref("hourlyRateBasic")}),1)', fmt='#,##0',
+         narration=f'=TEXT({b.ref("hourlyRateBasic")},"0.00")&"円 → "&{b.ref("hourlyRatePractical")}&"円"')
+    b.reserve('premiumRatePractical')
+    b.cb('premiumRatePractical', '割増単価（円未満切り上げ）',
+         f'=CEILING({b.ref("hourlyRatePractical")}*(1+{b.ref("otRate")}/100),1)', fmt='#,##0',
+         narration=f'={b.ref("hourlyRatePractical")}&"円 × "&TEXT(1+{b.ref("otRate")}/100,"0.00")&"（割増"&{b.ref("otRate")}&"%） = "&{b.ref("premiumRatePractical")}&"円"')
+    b.reserve('avgMonthlyWorkDays')
+    b.cb('avgMonthlyWorkDays', '平均月所定労働日数', f'={b.ref("annualWorkDays")}/12', fmt='0.00',
+         narration=f'={b.ref("annualWorkDays")}&"日 ÷ 12ヶ月 = "&TEXT({b.ref("avgMonthlyWorkDays")},"0.00")&"日"')
+    b.reserve('gapHours')
+    b.cb('gapHours', 'ギャップ時間（1日8時間との差・月平均換算）',
+         f'=ROUND(MAX(0,8-{b.ref("dailyH")})*{b.ref("avgMonthlyWorkDays")},1)', fmt='0.0',
+         narration=f'=TEXT(MAX(0,8-{b.ref("dailyH")}),"0.00")&"時間 × "&TEXT({b.ref("avgMonthlyWorkDays")},"0.00")&"日 = "&TEXT({b.ref("gapHours")},"0.0")&"時間"')
+    b.reserve('straightHoursGap')
+    b.cb('straightHoursGap', '通常単価で計算する時間', f'=MIN({b.ref("fixedOTHours")},{b.ref("gapHours")})', fmt='0.0',
+         narration=f'=TEXT({b.ref("fixedOTHours")},"0.0")&"h と "&TEXT({b.ref("gapHours")},"0.0")&"h の小さい方 = "&TEXT({b.ref("straightHoursGap")},"0.0")&"h"')
+    b.reserve('premiumHoursGap')
+    b.cb('premiumHoursGap', '割増単価で計算する時間', f'=MAX(0,{b.ref("fixedOTHours")}-{b.ref("gapHours")})', fmt='0.0',
+         narration=f'=TEXT({b.ref("fixedOTHours")},"0.0")&"h − "&TEXT({b.ref("gapHours")},"0.0")&"h = "&TEXT({b.ref("premiumHoursGap")},"0.0")&"h"')
+    b.reserve('straightAmount')
+    b.cb('straightAmount', '通常単価部分の金額',
+         f'=CEILING({b.ref("straightHoursGap")}*{b.ref("hourlyRatePractical")},1)', fmt='#,##0',
+         narration=f'=TEXT({b.ref("straightHoursGap")},"0.0")&"時間 × "&{b.ref("hourlyRatePractical")}&"円 = "&TEXT({b.ref("straightAmount")},"#,##0")&"円"')
+    b.reserve('premiumAmountGap')
+    b.cb('premiumAmountGap', '割増単価部分の金額',
+         f'=CEILING({b.ref("premiumHoursGap")}*{b.ref("premiumRatePractical")},1)', fmt='#,##0',
+         narration=f'=TEXT({b.ref("premiumHoursGap")},"0.0")&"時間 × "&{b.ref("premiumRatePractical")}&"円 = "&TEXT({b.ref("premiumAmountGap")},"#,##0")&"円"')
+    b.reserve('fixedOTRequired2')
+    b.cb('fixedOTRequired2', '【パターン2】必要な固定残業代額（判定に使用）',
+         f'={b.ref("straightAmount")}+{b.ref("premiumAmountGap")}', fmt='#,##0',
+         narration=f'={b.ref("straightAmount")}&"円 + "&{b.ref("premiumAmountGap")}&"円 = "&TEXT({b.ref("fixedOTRequired2")},"#,##0")&"円"')
+
     b.reserve('j8_3')
     b.judgment_row('j8_3', '8-3', '固定残業代の適正額チェック',
         f'=IF(AND({b.ref("wageType")}="月給制",{b.ref("fixedOT")}>0,{b.ref("fixedOTHours")}>0),'
-        f'IF({b.ref("fixedOT")}>={b.ref("fixedOTRequired")},"○","✗"),"－")',
+        f'IF({b.ref("fixedOT")}>={b.ref("fixedOTRequired2")},"○","✗"),"－")',
         detail=f'=IF({xref(b,"j8_3")}="－","該当なし",'
-               f'"必要額: "&TEXT({xref(b,"fixedOTRequired")},"#,##0")&"円 / 設定額: "&TEXT({xref(b,"fixedOT")},"#,##0")&"円")')
+               f'"必要額（実務方式・パターン2）: "&TEXT({xref(b,"fixedOTRequired2")},"#,##0")&"円 / 参考（現行方式・パターン1）: "&TEXT({xref(b,"fixedOTRequired")},"#,##0")&"円 / 設定額: "&TEXT({xref(b,"fixedOT")},"#,##0")&"円")')
 
 
 # ── チェック結果シート（集計） ───────────────────────────────
