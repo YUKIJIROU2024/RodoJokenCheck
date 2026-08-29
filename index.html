@@ -119,6 +119,18 @@
     .btn-cloud-save:hover { background: #065f46; }
     .btn-cloud-out { color: #fca5a5; border-color: rgba(252,165,165,0.35); }
 
+    /* ── パスワードゲート ── */
+    .auth-gate { position: fixed; inset: 0; background: #eef2f7; z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .auth-gate.hidden { display: none; }
+    .auth-box { background: white; border-radius: 10px; max-width: 360px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.25); overflow: hidden; }
+    .auth-box-header { background: #1a3a6e; color: white; padding: 16px 20px; font-size: 15px; letter-spacing: 0.05em; }
+    .auth-box-body { padding: 20px; }
+    .auth-box-body label { display: block; font-size: 13px; color: #4b5563; margin-bottom: 6px; }
+    .auth-box-body input { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 15px; border: 1px solid #d1d5db; border-radius: 6px; }
+    .auth-box-body button { margin-top: 12px; width: 100%; padding: 9px; font-size: 14px; background: #1a3a6e; color: white; border: none; border-radius: 6px; cursor: pointer; }
+    .auth-box-body button:hover { background: #15305c; }
+    .auth-error { display: none; color: #dc2626; font-size: 13px; margin-top: 8px; }
+
     /* ── 履歴モーダル ── */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
     .modal-overlay.hidden { display: none; }
@@ -158,6 +170,38 @@
   </style>
 </head>
 <body>
+
+<div class="auth-gate no-print" id="authGate">
+  <div class="auth-box">
+    <div class="auth-box-header">ハローワーク 労働条件チェッカー</div>
+    <div class="auth-box-body">
+      <label for="authPasswordInput">パスワードを入力してください</label>
+      <input type="password" id="authPasswordInput" autocomplete="off" onkeydown="if(event.key==='Enter')checkAuthPassword()">
+      <button onclick="checkAuthPassword()">開く</button>
+      <div class="auth-error" id="authError">パスワードが違います</div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var AUTH_PASSWORD = '451028';
+  var AUTH_KEY = 'rjc_auth_ok';
+  window.checkAuthPassword = function () {
+    var val = document.getElementById('authPasswordInput').value;
+    if (val === AUTH_PASSWORD) {
+      try { localStorage.setItem(AUTH_KEY, '1'); } catch (e) {}
+      document.getElementById('authGate').classList.add('hidden');
+    } else {
+      document.getElementById('authError').style.display = 'block';
+    }
+  };
+  var alreadyOk = false;
+  try { alreadyOk = localStorage.getItem(AUTH_KEY) === '1'; } catch (e) {}
+  if (alreadyOk) {
+    document.getElementById('authGate').classList.add('hidden');
+  }
+})();
+</script>
 
 <div class="app-header">
   <h1>ハローワーク 労働条件チェッカー</h1>
