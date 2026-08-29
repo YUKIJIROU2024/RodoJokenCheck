@@ -358,7 +358,8 @@ def build_check_sheet(b):
     b.reserve('legalAnnualH')
     b.cb('legalAnnualH', '年間法定労働時間の上限', f'={b.ref("weeklyLimit")}*52', fmt='0',
          narration=f'={b.ref("weeklyLimit")}&"時間 × 52週 = "&{b.ref("legalAnnualH")}&"時間"')
-    b.reserve('flexType')
+    b.inp('flexType', '変形制の種類', 'なし', choices=['なし', '1ヶ月単位', '1年単位', 'フレックス'],
+          note='実際の変形制の詳細設定は下記「⑤ 変形労働時間制」セクションで入力してください')
 
     # ── ① 労働時間 ───────────────────────────────────────────
     b.section_hdr('① 労働時間')
@@ -442,7 +443,6 @@ def build_check_sheet(b):
 
     # ── ⑤ 変形労働時間制 ─────────────────────────────────────
     b.section_hdr('⑤ 変形労働時間制')
-    b.inp('flexType', '変形制の種類', 'なし', choices=['なし', '1ヶ月単位', '1年単位', 'フレックス'])
 
     b.input_sec('1ヶ月単位変形制の設定')
     b.inp('flexMonAgreement', '就業規則/労使協定', '有・対応済', choices=['有・対応済', 'なし'])
@@ -571,36 +571,64 @@ def build_check_sheet(b):
          f'IF({b.ref("wageType")}="日給制",{b.ref("dailySalary")},{b.ref("hourlySalary")}))', fmt='#,##0')
     b.cb('annualBasic', '年額基本給（月給制のみ）',
          f'=IF({b.ref("wageType")}="月給制",{b.ref("basicMonthly")}*12,0)', fmt='#,##0')
+    b.reserve('annualWorkHForWage')
+    b.cb('annualWorkHForWage', '最低賃金判定用の年間総労働時間',
+         f'=IF({b.ref("nightShiftOnly")}="はい",{b.ref("annShiftHours")},{b.ref("annualWorkH")})', fmt='0.0',
+         narration=f'=IF({b.ref("nightShiftOnly")}="はい","夜勤専従モードの実質値（⑤5-2と同じ）: "&TEXT({b.ref("annShiftHours")},"0.0")&"時間",TEXT({b.ref("annualWorkH")},"0.0")&"時間（④休日設定ベース）")')
     b.reserve('hourlyRateBasic')
     b.cb('hourlyRateBasic', '基本給の時間換算額（円/時間）',
-         f'=IF({b.ref("wageType")}="月給制",IF({b.ref("annualWorkH")}>0,{b.ref("annualBasic")}/{b.ref("annualWorkH")},0),'
+         f'=IF({b.ref("wageType")}="月給制",IF({b.ref("annualWorkHForWage")}>0,{b.ref("annualBasic")}/{b.ref("annualWorkHForWage")},0),'
          f'IF({b.ref("wageType")}="日給制",IF({b.ref("dailyH")}>0,{b.ref("dailySalary")}/{b.ref("dailyH")},0),{b.ref("hourlySalary")}))',
          fmt='#,##0.00',
          narration=f'=TEXT({b.ref("hourlyRateBasic")},"0.00")&"円/時間（最低賃金 "&{b.ref("minWage")}&"円）"')
+
+    b.reserve('nightOverlapMin')
+    b.cb('nightOverlapMin', '夜勤専従：1回あたり深夜時間帯(22-5時)との重複（分）',
+         f'=MAX(0,MIN(IF({b.ref("endTime")}<{b.ref("startTime")},{b.ref("endTime")}+1,{b.ref("endTime")})*1440,1740)-MAX({b.ref("startTime")}*1440,1320))',
+         fmt='0',
+         narration=f'="22:00〜翌5:00（420分）とシフトの重複 = "&{b.ref("nightOverlapMin")}&"分"')
+    b.reserve('nightHoursPerShift')
+    b.cb('nightHoursPerShift', '夜勤専従：1回あたり深夜労働時間（休憩重なり控除後）',
+         f'=MAX(0,({b.ref("nightOverlapMin")}-MIN({b.ref("breakTime")},{b.ref("nightOverlapMin")}))/60)', fmt='0.0',
+         narration=f'=TEXT({b.ref("nightOverlapMin")}/60,"0.0")&"時間 − 休憩重なり"&TEXT(MIN({b.ref("breakTime")},{b.ref("nightOverlapMin")})/60,"0.0")&"時間 = "&TEXT({b.ref("nightHoursPerShift")},"0.0")&"時間"')
+    b.reserve('avgMonthlyNightHours')
+    b.cb('avgMonthlyNightHours', '夜勤専従：月平均深夜労働時間',
+         f'={b.ref("nightHoursPerShift")}*{b.ref("avgMonthlyShiftCount")}', fmt='0.0',
+         narration=f'=TEXT({b.ref("nightHoursPerShift")},"0.0")&"時間 × "&TEXT({b.ref("avgMonthlyShiftCount")},"0.0")&"回 = "&TEXT({b.ref("avgMonthlyNightHours")},"0.0")&"時間/月"')
+    b.reserve('nightPremiumUnit')
+    b.cb('nightPremiumUnit', '夜勤専従：深夜割増単価（参考・最低賃金×深夜割増率）',
+         f'={b.ref("minWage")}*{b.ref("nightRate")}/100', fmt='0.00',
+         narration=f'={b.ref("minWage")}&"円 × "&{b.ref("nightRate")}&"% = "&TEXT({b.ref("nightPremiumUnit")},"0.00")&"円/時間"')
+    b.reserve('requiredNightPremium')
+    b.cb('requiredNightPremium', '夜勤専従：月必要深夜割増額（参考）',
+         f'={b.ref("avgMonthlyNightHours")}*{b.ref("nightPremiumUnit")}', fmt='#,##0',
+         narration=f'=TEXT({b.ref("avgMonthlyNightHours")},"0.0")&"時間 × "&TEXT({b.ref("nightPremiumUnit")},"0.00")&"円 ≒ "&TEXT({b.ref("requiredNightPremium")},"#,##0")&"円/月　※最低賃金判定は所定内賃金のみで行います"')
+
     b.judgment_row('j8_1', '8-1', '基本給のみの最低賃金比較',
         f'=IF({b.ref("wageType")}="月給制",'
         f'IF(OR({b.ref("monthlySalary")}=0,{b.ref("monthlySalary")}=""),"△",'
-        f'IF({b.ref("annualWorkH")}>0,IF({b.ref("hourlyRateBasic")}>={b.ref("minWage")},"○","✗"),"△")),'
+        f'IF({b.ref("annualWorkHForWage")}>0,IF({b.ref("hourlyRateBasic")}>={b.ref("minWage")},"○","✗"),"△")),'
         f'IF({b.ref("wageType")}="日給制",'
         f'IF(OR({b.ref("dailySalary")}=0,{b.ref("dailySalary")}=""),"△",'
         f'IF({b.ref("dailyH")}>0,IF({b.ref("hourlyRateBasic")}>={b.ref("minWage")},"○","✗"),"△")),'
         f'IF(OR({b.ref("hourlySalary")}=0,{b.ref("hourlySalary")}=""),"△",'
         f'IF({b.ref("hourlySalary")}>={b.ref("minWage")},"○","✗"))))',
-        detail=f'="時間換算額: "&TEXT({xref(b,"hourlyRateBasic")},"0.00")&"円/h（最低賃金 "&{xref(b,"minWage")}&"円）"')
+        detail=f'="時間換算額: "&TEXT({xref(b,"hourlyRateBasic")},"0.00")&"円/h（最低賃金 "&{xref(b,"minWage")}&"円）"'
+               f'&IF({xref(b,"nightShiftOnly")}="はい","　｜　参考: 深夜(22-5時)実働"&TEXT({xref(b,"nightHoursPerShift")},"0.0")&"h/回、月平均"&TEXT({xref(b,"avgMonthlyNightHours")},"0.0")&"h、必要深夜割増額(参考)"&TEXT({xref(b,"requiredNightPremium")},"#,##0")&"円/月","")')
 
     b.sep_row('── 8-2：総額（固定残業代込み）の最低賃金比較 ──')
     b.cb('annualTotal', '年額総給与（月給制・固定残業代あり時のみ）',
          f'=IF(AND({b.ref("wageType")}="月給制",{b.ref("fixedOT")}>0),{b.ref("monthlySalary")}*12,0)', fmt='#,##0')
     b.reserve('hourlyRateTotal')
     b.cb('hourlyRateTotal', '総給与の時間換算額（円/時間）',
-         f'=IF(AND({b.ref("wageType")}="月給制",{b.ref("fixedOT")}>0,{b.ref("annualWorkH")}>0),'
-         f'{b.ref("annualTotal")}/{b.ref("annualWorkH")},0)', fmt='#,##0.00',
+         f'=IF(AND({b.ref("wageType")}="月給制",{b.ref("fixedOT")}>0,{b.ref("annualWorkHForWage")}>0),'
+         f'{b.ref("annualTotal")}/{b.ref("annualWorkHForWage")},0)', fmt='#,##0.00',
          narration=f'=IF(AND({b.ref("wageType")}="月給制",{b.ref("fixedOT")}>0),'
                     f'TEXT({b.ref("hourlyRateTotal")},"0.00")&"円/時間","該当なし（固定残業代なし）")')
     b.reserve('j8_2')
     b.judgment_row('j8_2', '8-2', '総額（固定残業代込み）の最低賃金比較',
         f'=IF(AND({b.ref("wageType")}="月給制",{b.ref("fixedOT")}>0),'
-        f'IF({b.ref("annualWorkH")}>0,IF({b.ref("hourlyRateTotal")}>={b.ref("minWage")},"○","✗"),"△"),"－")',
+        f'IF({b.ref("annualWorkHForWage")}>0,IF({b.ref("hourlyRateTotal")}>={b.ref("minWage")},"○","✗"),"△"),"－")',
         detail=f'=IF({xref(b,"j8_2")}="－","該当なし（固定残業代なし）",'
                f'"総給与時換算: "&TEXT({xref(b,"hourlyRateTotal")},"0.00")&"円/h（最低賃金 "&{xref(b,"minWage")}&"円）")')
 

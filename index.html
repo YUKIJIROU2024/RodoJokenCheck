@@ -1458,7 +1458,21 @@ function calcS8() {
     const year = new Date().getFullYear();
     const annOff = getAnnualOffDays(year);
     const annWorkDays = 365 - annOff;
-    const annWorkH = dailyH * annWorkDays;
+    const nightShiftOnly = document.getElementById('nightShiftOnly').checked;
+
+    let annWorkH, nightShiftAnnualLine;
+    if (nightShiftOnly) {
+      const annShiftCount = annWorkDays / 2;
+      annWorkH = annShiftCount * dailyH;
+      nightShiftAnnualLine =
+        '【夜勤専従・勤務間インターバル11時間未確保モード（⑤5-2と同じ実質値）】\n' +
+        '実質年間出勤回数: ' + annWorkDays + '日 ÷ 2 = ' + annShiftCount.toFixed(1) + '回\n' +
+        '年間総労働時間: ' + annShiftCount.toFixed(1) + '回 × ' + dailyH.toFixed(2) + '時間 = ' + annWorkH.toFixed(1) + '時間\n';
+    } else {
+      annWorkH = dailyH * annWorkDays;
+      nightShiftAnnualLine =
+        '年間総労働時間: ' + dailyH.toFixed(2) + '時間 × ' + annWorkDays + '日 = ' + annWorkH.toFixed(1) + '時間\n';
+    }
 
     const weeklyOff = getWeeklyOffDays();
     const pubHol = countPubHolOnWorkDays(year);
@@ -1472,7 +1486,7 @@ function calcS8() {
       holBreakdown + '\n' +
       '= 年間休日合計: ' + annOff + '日\n' +
       '年間就労日数: 365 − ' + annOff + ' = ' + annWorkDays + '日\n' +
-      '年間総労働時間: ' + dailyH.toFixed(2) + '時間 × ' + annWorkDays + '日 = ' + annWorkH.toFixed(1) + '時間\n';
+      nightShiftAnnualLine;
 
     // 8-1: basic salary only (excluding fixed OT)
     const basicMonthly = monthly - fixedOT;
@@ -1495,6 +1509,37 @@ function calcS8() {
       '最低賃金:   ' + minWage.toLocaleString() + '円/時間\n' +
       '差額:       ' + (diffBasic >= 0 ? '+' : '') + diffBasic.toFixed(2) + '円/時間\n' +
       '判  定: ' + (j81==='ok' ? '○ 最低賃金以上' : '✗ 最低賃金未満（' + Math.abs(diffBasic).toFixed(2) + '円/時間 不足）');
+
+    let nightDiffText = '';
+    if (nightShiftOnly) {
+      const nightRate = parseFloat(document.getElementById('nightRate').value) || 25;
+      const commonStart = timeToMin(document.getElementById('startTime').value);
+      let commonEnd = timeToMin(document.getElementById('endTime').value);
+      if (commonEnd < commonStart) commonEnd += 24 * 60;
+      const commonBreak = parseInt(document.getElementById('breakTime').value) || 0;
+
+      const nightWindowStart = 22 * 60;        // 22:00
+      const nightWindowEnd = 22 * 60 + 7 * 60;  // 翌5:00（29:00 = 1740分）
+      const nightOverlapMin = Math.max(0, Math.min(commonEnd, nightWindowEnd) - Math.max(commonStart, nightWindowStart));
+      const breakInNight = Math.min(commonBreak, nightOverlapMin);
+      const nightHoursPerShift = Math.max(0, (nightOverlapMin - breakInNight) / 60);
+
+      const annShiftCount2 = annWorkDays / 2;
+      const avgMonthlyShiftCount = annShiftCount2 / 12;
+      const avgMonthlyNightHours = nightHoursPerShift * avgMonthlyShiftCount;
+      const nightPremiumUnit = minWage * nightRate / 100;
+      const requiredNightPremium = avgMonthlyNightHours * nightPremiumUnit;
+
+      nightDiffText =
+        '\n\n【参考：深夜労働時間と必要割増額】\n' +
+        '1回あたり深夜時間（22:00〜5:00）: ' + (nightOverlapMin/60).toFixed(1) + '時間 − 休憩重なり' + (breakInNight/60).toFixed(1) + '時間 = ' + nightHoursPerShift.toFixed(1) + '時間\n' +
+        '月平均深夜回数: ' + avgMonthlyShiftCount.toFixed(1) + '回\n' +
+        '月平均深夜時間: ' + nightHoursPerShift.toFixed(1) + '時間 × ' + avgMonthlyShiftCount.toFixed(1) + '回 = ' + avgMonthlyNightHours.toFixed(1) + '時間/月\n' +
+        '深夜割増単価: ' + minWage.toLocaleString() + '円 × ' + nightRate + '% = ' + nightPremiumUnit.toFixed(2) + '円/時間\n' +
+        '月必要深夜割増額（参考）: ' + avgMonthlyNightHours.toFixed(1) + '時間 × ' + nightPremiumUnit.toFixed(2) + '円 ≒ ' + Math.round(avgMonthlyNightHours * nightPremiumUnit).toLocaleString() + '円/月\n' +
+        '※最低賃金の判定自体は所定内賃金（基本給）のみで行います。';
+    }
+    proc81 += nightDiffText;
     setP('proc8-1', proc81);
 
     const result = { '8-1': j81 };
