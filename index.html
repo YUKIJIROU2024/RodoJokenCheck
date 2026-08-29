@@ -958,25 +958,52 @@ function calcS1() {
   const avgMin = getAvgDailyMin();
   const overDays = perDay.filter(d => d.min/60 > 8);
 
-  const j11 = overDays.length ? 'ng' : 'ok';
-  setJ('j1-1', j11);
+  const flexType = document.getElementById('flexType').value;
+  const flexLabel = flexType==='monthly' ? '1ヶ月単位の変形労働時間制'
+                   : flexType==='annual'  ? '1年単位の変形労働時間制'
+                   : flexType==='flex'    ? 'フレックスタイム制' : '';
+
   const dayLines1 = perDay.map(d =>
     d.name + ': 始業 ' + d.sched.start + '  終業 ' + d.sched.end + '  休憩 ' + d.sched.break + '分 → ' + minToStr(d.min) +
     (d.min/60 > 8 ? '（8時間超）' : '')
   ).join('\n');
-  setP('proc1-1',
-    (dayLines1 || '（就業日がありません）') + '\n\n' +
-    '法定基準: 8時間以内（労基法 第32条2項）\n' +
-    '判  定: ' + (j11==='ok' ? '○ 法定基準内' : '✗ ' + overDays.map(d=>d.name).join('・') + '曜日が8時間超過 → 時間外労働となるため36協定が必要'));
 
-  const j12 = wMin/60 <= wLim ? 'ok' : 'ng';
-  setJ('j1-2', j12);
+  let j11;
+  if (flexType === 'none') {
+    j11 = overDays.length ? 'ng' : 'ok';
+    setJ('j1-1', j11);
+    setP('proc1-1',
+      (dayLines1 || '（就業日がありません）') + '\n\n' +
+      '法定基準: 8時間以内（労基法 第32条2項）\n' +
+      '判  定: ' + (j11==='ok' ? '○ 法定基準内' : '✗ ' + overDays.map(d=>d.name).join('・') + '曜日が8時間超過 → 時間外労働となるため36協定が必要'));
+  } else {
+    j11 = 'info';
+    setJ('j1-1', j11);
+    setP('proc1-1',
+      (dayLines1 || '（就業日がありません）') + '\n\n' +
+      '参考: ' + flexLabel + 'を採用しているため、労基法第32条2項の1日8時間の基準は直接適用されません。\n' +
+      '実際の上限は「⑤ 変形労働時間制」タブの判定（5-1〜5-3）をご確認ください。');
+  }
+
   const dayLines2 = perDay.map(d => minToH(d.min) + 'h(' + d.name + ')').join(' + ') || '0';
-  setP('proc1-2',
-    '就業日: ' + workStr + '（週' + workDays.length + '日）  休日: ' + offStr + '（週' + (7-workDays.length) + '日）\n' +
-    '計算式: ' + dayLines2 + ' = ' + minToH(wMin) + '時間/週\n' +
-    '法定基準: ' + wLim + '時間以内' + (isSpecial() ? '（特例措置適用中: 44時間）' : '') + '（労基法 第32条1項' + (isSpecial() ? '、第40条' : '') + '）\n' +
-    '判  定: ' + (j12==='ok' ? '○ 法定基準内' : '✗ ' + wLim + '時間超過'));
+  let j12;
+  if (flexType === 'none') {
+    j12 = wMin/60 <= wLim ? 'ok' : 'ng';
+    setJ('j1-2', j12);
+    setP('proc1-2',
+      '就業日: ' + workStr + '（週' + workDays.length + '日）  休日: ' + offStr + '（週' + (7-workDays.length) + '日）\n' +
+      '計算式: ' + dayLines2 + ' = ' + minToH(wMin) + '時間/週\n' +
+      '法定基準: ' + wLim + '時間以内' + (isSpecial() ? '（特例措置適用中: 44時間）' : '') + '（労基法 第32条1項' + (isSpecial() ? '、第40条' : '') + '）\n' +
+      '判  定: ' + (j12==='ok' ? '○ 法定基準内' : '✗ ' + wLim + '時間超過'));
+  } else {
+    j12 = 'info';
+    setJ('j1-2', j12);
+    setP('proc1-2',
+      '就業日: ' + workStr + '（週' + workDays.length + '日）  休日: ' + offStr + '（週' + (7-workDays.length) + '日）\n' +
+      '計算式: ' + dayLines2 + ' = ' + minToH(wMin) + '時間/週\n' +
+      '参考: ' + flexLabel + 'を採用しているため、労基法第32条1項の週' + wLim + '時間の基準は直接適用されません。\n' +
+      '実際の上限は「⑤ 変形労働時間制」タブの判定（5-1〜5-3）をご確認ください。');
+  }
 
   const offDaysBreakdown =
     '週休: ' + getWeeklyOffDays() + '日 × 52週 = ' + (getWeeklyOffDays()*52) + '日' +
@@ -991,7 +1018,9 @@ function calcS1() {
     '平均1日所定労働時間: ' + minToH(wMin) + '時間/週 ÷ 週' + workDays.length + '日 = ' + minToH(avgMin) + '時間/日\n' +
     '年間総労働時間（推定）: ' + awd + '日 × ' + minToH(avgMin) + '時間 = ' + (avgMin * awd / 60).toFixed(1) + '時間');
 
-  return { '1-1': j11, '1-2': j12 };
+  const ret = {};
+  if (flexType === 'none') { ret['1-1'] = j11; ret['1-2'] = j12; }
+  return ret;
 }
 
 // ────────────────────────────────────────────────

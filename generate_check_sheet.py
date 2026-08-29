@@ -358,6 +358,7 @@ def build_check_sheet(b):
     b.reserve('legalAnnualH')
     b.cb('legalAnnualH', '年間法定労働時間の上限', f'={b.ref("weeklyLimit")}*52', fmt='0',
          narration=f'={b.ref("weeklyLimit")}&"時間 × 52週 = "&{b.ref("legalAnnualH")}&"時間"')
+    b.reserve('flexType')
 
     # ── ① 労働時間 ───────────────────────────────────────────
     b.section_hdr('① 労働時間')
@@ -366,13 +367,17 @@ def build_check_sheet(b):
         for d in range(7)
     )
     b.judgment_row('j1_1', '1-1', '1日の所定労働時間',
-        f'=IF({b.ref("maxDailyH")}<=8,"○","✗")',
-        detail=f'=IF({xref(b,"maxDailyH")}<=8,'
+        f'=IF({b.ref("flexType")}<>"なし","参考",IF({b.ref("maxDailyH")}<=8,"○","✗"))',
+        detail=f'=IF({xref(b,"flexType")}<>"なし",'
+               f'"参考: "&{xref(b,"flexType")}&"を採用しているため、労基法第32条2項の1日8時間の基準は直接適用されません。実際の上限は⑤タブの判定（5-1〜5-3）をご確認ください。最大1日所定労働時間: "&TEXT({xref(b,"maxDailyH")},"0.00")&"時間",'
+               f'IF({xref(b,"maxDailyH")}<=8,'
                f'"最大1日労働時間: "&TEXT({xref(b,"maxDailyH")},"0.00")&"時間（上限8時間）",'
-               f'"8時間超過曜日: "&_xlfn.TEXTJOIN("・",TRUE,{over_parts})&"曜日")')
+               f'"8時間超過曜日: "&_xlfn.TEXTJOIN("・",TRUE,{over_parts})&"曜日"))')
     b.judgment_row('j1_2', '1-2', '週の所定労働時間',
-        f'=IF({b.ref("weeklyH")}<={b.ref("weeklyLimit")},"○","✗")',
-        detail=f'="週労働時間: "&TEXT({xref(b,"weeklyH")},"0.00")&"時間（上限"&{xref(b,"weeklyLimit")}&"時間）"')
+        f'=IF({b.ref("flexType")}<>"なし","参考",IF({b.ref("weeklyH")}<={b.ref("weeklyLimit")},"○","✗"))',
+        detail=f'=IF({xref(b,"flexType")}<>"なし",'
+               f'"参考: "&{xref(b,"flexType")}&"を採用しているため、労基法第32条1項の週"&{xref(b,"weeklyLimit")}&"時間の基準は直接適用されません。実際の上限は⑤タブの判定（5-1〜5-3）をご確認ください。週所定労働時間: "&TEXT({xref(b,"weeklyH")},"0.00")&"時間",'
+               f'"週労働時間: "&TEXT({xref(b,"weeklyH")},"0.00")&"時間（上限"&{xref(b,"weeklyLimit")}&"時間）")')
     b.judgment_row('j1_3', '1-3', '年間総労働時間（参考）', '="参考"',
         detail=f'="年間就業: "&{xref(b,"annualWorkDays")}&"日 / 年間労働: "&TEXT({xref(b,"annualWorkH")},"0.0")&"時間"')
 
