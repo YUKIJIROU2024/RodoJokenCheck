@@ -443,6 +443,24 @@ def build_check_sheet(b):
     b.inp('flexMonAgreement', '就業規則/労使協定', '有・対応済', choices=['有・対応済', 'なし'])
     b.inp('flexMonReport', '労基署への届出', '届出済', choices=['届出済', '未届出'])
     b.inp('flexMonTotal', '1ヶ月の総所定労働時間（時間）', 0, note='0=未設定')
+    b.inp('nightShiftOnly', '夜勤専従・勤務間インターバル11時間未確保（1勤務+翌日「明け」の2日1サイクル）', 'いいえ', choices=['いいえ', 'はい'],
+          note='夜勤専従で、勤務終了〜翌日の同じ勤務開始までの間隔が11時間未満のため連続勤務できない場合「はい」。年間労働日数÷2で実質出勤回数を算出し、月間所定労働時間を自動計算します（11時間以上確保できる勤務パターンには適用しないこと）')
+    b.reserve('annShiftCount')
+    b.cb('annShiftCount', '夜勤専従(11hインターバル未確保)：実質年間出勤回数', f'={b.ref("annualWorkDays")}/2', fmt='0.0',
+         narration=f'={b.ref("annualWorkDays")}&"日 ÷ 2 = "&TEXT({b.ref("annShiftCount")},"0.0")&"回"')
+    b.reserve('annShiftHours')
+    b.cb('annShiftHours', '夜勤専従(11hインターバル未確保)：年間総労働時間', f'={b.ref("annShiftCount")}*{b.ref("dailyH")}', fmt='0.0',
+         narration=f'=TEXT({b.ref("annShiftCount")},"0.0")&"回 × "&TEXT({b.ref("dailyH")},"0.00")&"時間 = "&TEXT({b.ref("annShiftHours")},"0.0")&"時間"')
+    b.reserve('avgMonthlyShiftCount')
+    b.cb('avgMonthlyShiftCount', '夜勤専従(11hインターバル未確保)：月平均出勤回数', f'={b.ref("annShiftCount")}/12', fmt='0.0',
+         narration=f'={b.ref("annShiftCount")}&"回 ÷ 12ヶ月 = "&TEXT({b.ref("avgMonthlyShiftCount")},"0.0")&"回"')
+    b.reserve('flexMonTotalAuto')
+    b.cb('flexMonTotalAuto', '夜勤専従(11hインターバル未確保)：月平均所定労働時間（自動計算）', f'={b.ref("annShiftHours")}/12', fmt='0.0',
+         narration=f'=TEXT({b.ref("annShiftHours")},"0.0")&"時間 ÷ 12ヶ月 = "&TEXT({b.ref("flexMonTotalAuto")},"0.0")&"時間"')
+    b.reserve('flexMonTotalEffective')
+    b.cb('flexMonTotalEffective', '1ヶ月の総所定労働時間（判定に使用）',
+         f'=IF({b.ref("nightShiftOnly")}="はい",{b.ref("flexMonTotalAuto")},{b.ref("flexMonTotal")})', fmt='0.0',
+         narration=f'=IF({b.ref("nightShiftOnly")}="はい","夜勤専従・インターバル未確保モードにより自動計算: "&TEXT({b.ref("flexMonTotalAuto")},"0.0")&"時間","手入力: "&TEXT({b.ref("flexMonTotal")},"0.0")&"時間")')
     b.reserve('flexMonMaxH')
     b.cb('flexMonMaxH', '1ヶ月単位の月間上限（時間）', f'={b.ref("weeklyLimit")}*4.348', fmt='0.0',
          narration=f'={b.ref("weeklyLimit")}&"時間 × 4.348週 ≒ "&TEXT({b.ref("flexMonMaxH")},"0.0")&"時間"')
@@ -471,7 +489,7 @@ def build_check_sheet(b):
         detail=f'="変形制の種類: "&{xref(b,"flexType")}')
 
     b.cb('j5_2m', '5-2判定（1ヶ月単位のみ）',
-         f'=IF({b.ref("flexMonTotal")}=0,"△",IF({b.ref("flexMonTotal")}<={b.ref("flexMonMaxH")},"○","✗"))')
+         f'=IF({b.ref("flexMonTotalEffective")}=0,"△",IF({b.ref("flexMonTotalEffective")}<={b.ref("flexMonMaxH")},"○","✗"))')
     b.cb('j5_2a', '5-2判定（1年単位のみ）',
          f'=IF(AND(OR({b.ref("flexAnnMaxDay")}=0,{b.ref("flexAnnMaxDay")}<=10),'
          f'OR({b.ref("flexAnnMaxWeek")}=0,{b.ref("flexAnnMaxWeek")}<=52)),"○","✗")')

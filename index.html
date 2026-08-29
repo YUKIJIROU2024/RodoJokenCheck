@@ -475,6 +475,12 @@
         </div>
       </div>
       <div class="form-group">
+        <label><input type="checkbox" id="nightShiftOnly" onchange="recalcAll(); saveAll()"> 夜勤専従・勤務間インターバル11時間未確保（1勤務+翌日「明け」の2日1サイクル）</label>
+        <div class="check-sub" style="margin-top:4px;">
+          夜勤専従で、かつ勤務終了から翌日の同じ勤務開始までの間隔が11時間未満のため、翌日に連続して勤務できない場合にチェックしてください（例: 18:00〜翌9:00勤務では、終業から翌日18:00までの間隔は9時間しかなく11時間を満たせないため、翌日は「明け」の休息日となる）。該当する場合、④休日タブの年間休日日数と①労働時間タブの1日の所定労働時間から、実質の年間出勤回数（年間労働日数÷2）を算出し、下の「1ヶ月の総所定労働時間」を自動計算します（チェック中は自動計算値が表示され、手入力欄は無効になります）。勤務間インターバルが11時間以上確保できる勤務パターンには適用しないでください。
+        </div>
+      </div>
+      <div class="form-group">
         <label>1ヶ月の総所定労働時間（時間）</label>
         <input type="number" id="flexMonthlyTotal" placeholder="例: 160" min="0" max="300" style="max-width:110px" oninput="recalcAll(); saveAll()">
       </div>
@@ -1137,10 +1143,47 @@ function calcS5() {
           '労働基準監督署 届出: ' + (rep==='yes'?'届出済 ○':'未届出 ✗') + '\n' +
           '判  定: ' + (j51==='ok' ? '○' : '✗ 書類整備・届出が必要');
 
-    const total = parseFloat(document.getElementById('flexMonthlyTotal').value) || 0;
+    const nightShiftOnly = document.getElementById('nightShiftOnly').checked;
+    const flexMonthlyTotalEl = document.getElementById('flexMonthlyTotal');
+    let total;
+    let nightShiftText = '';
+    if (nightShiftOnly) {
+      if (flexMonthlyTotalEl.dataset.manualValue === undefined) {
+        flexMonthlyTotalEl.dataset.manualValue = flexMonthlyTotalEl.value;
+      }
+      const dailyH = getAvgDailyMin() / 60;
+      const year = new Date().getFullYear();
+      const annOff = getAnnualOffDays(year);
+      const annWorkDays = 365 - annOff;
+      const annShiftCount = annWorkDays / 2;
+      const annShiftHours = annShiftCount * dailyH;
+      const avgMonthlyShiftCount = annShiftCount / 12;
+      total = annShiftHours / 12;
+      flexMonthlyTotalEl.value = total.toFixed(1);
+      flexMonthlyTotalEl.readOnly = true;
+      flexMonthlyTotalEl.style.background = '#f0f0f0';
+      nightShiftText =
+        '【夜勤専従・勤務間インターバル11時間未確保モード：1ヶ月の総所定労働時間を自動計算】\n' +
+        '④休日設定より 年間休日: ' + annOff + '日 → 年間労働日数: ' + annWorkDays + '日\n' +
+        '実質年間出勤回数: ' + annWorkDays + '日 ÷ 2 = ' + annShiftCount.toFixed(1) + '回\n' +
+        '1回あたり所定労働時間: ' + dailyH.toFixed(2) + '時間（① 労働時間タブの設定を使用）\n' +
+        '年間総労働時間: ' + annShiftCount.toFixed(1) + '回 × ' + dailyH.toFixed(2) + '時間 = ' + annShiftHours.toFixed(1) + '時間\n' +
+        '月平均出勤回数: ' + annShiftCount.toFixed(1) + '回 ÷ 12ヶ月 = ' + avgMonthlyShiftCount.toFixed(1) + '回\n' +
+        '月平均所定労働時間（自動計算）: ' + annShiftHours.toFixed(1) + '時間 ÷ 12ヶ月 = ' + total.toFixed(1) + '時間\n\n';
+    } else {
+      if (flexMonthlyTotalEl.dataset.manualValue !== undefined) {
+        flexMonthlyTotalEl.value = flexMonthlyTotalEl.dataset.manualValue;
+        delete flexMonthlyTotalEl.dataset.manualValue;
+      }
+      flexMonthlyTotalEl.readOnly = false;
+      flexMonthlyTotalEl.style.background = '';
+      total = parseFloat(flexMonthlyTotalEl.value) || 0;
+    }
+
     const maxH = (wLim * 4.348).toFixed(1);
     j52 = total>0 && total<=parseFloat(maxH) ? 'ok' : (total===0 ? 'warn' : 'ng');
-    p52 = '1ヶ月の総所定労働時間: ' + (total>0?total+'時間':'未入力') + '\n' +
+    p52 = nightShiftText +
+          '1ヶ月の総所定労働時間: ' + (total>0?total.toFixed(1)+'時間':'未入力') + '\n' +
           '法定上限（目安）: 週' + wLim + '時間 × 4.348週 ≒ ' + maxH + '時間\n' +
           '判  定: ' + (j52==='ok'?'○ 基準内':j52==='warn'?'△ 時間を入力してください':'✗ 上限超過の可能性');
 
@@ -1684,7 +1727,7 @@ function getCurrentInputs() {
   return {
     businessName:gv('businessName'), checkDate:gv('checkDate'), specialMeasure:gc('specialMeasure'),
     startTime:gv('startTime'), endTime:gv('endTime'), breakTime:gv('breakTime'),
-    useWeekdaySchedule:gc('useWeekdaySchedule'),
+    useWeekdaySchedule:gc('useWeekdaySchedule'), nightShiftOnly:gc('nightShiftOnly'),
     daySchedule: Array.from({length:7}, (_,i) => ({
       start: gv('dayStart'+i), end: gv('dayEnd'+i), break: gv('dayBreak'+i)
     })),
@@ -1800,6 +1843,7 @@ function restoreCheck(inputs) {
   sv('businessName',inputs.businessName); sv('checkDate',inputs.checkDate); sc('specialMeasure',inputs.specialMeasure);
   sv('startTime',inputs.startTime); sv('endTime',inputs.endTime); sv('breakTime',inputs.breakTime);
   document.getElementById('useWeekdaySchedule').checked = !!inputs.useWeekdaySchedule;
+  document.getElementById('nightShiftOnly').checked = !!inputs.nightShiftOnly;
   {
     const ds = Array.isArray(inputs.daySchedule) ? inputs.daySchedule : [];
     for (let i = 0; i < 7; i++) {
@@ -1872,7 +1916,7 @@ function saveAll() {
   const d = {
     businessName:gv('businessName'), checkDate:gv('checkDate'), specialMeasure:gc('specialMeasure'),
     startTime:gv('startTime'), endTime:gv('endTime'), breakTime:gv('breakTime'),
-    useWeekdaySchedule:gc('useWeekdaySchedule'),
+    useWeekdaySchedule:gc('useWeekdaySchedule'), nightShiftOnly:gc('nightShiftOnly'),
     daySchedule: Array.from({length:7}, (_,i) => ({
       start: gv('dayStart'+i), end: gv('dayEnd'+i), break: gv('dayBreak'+i)
     })),
@@ -1901,6 +1945,7 @@ function loadAll() {
   sv('businessName',d.businessName); sv('checkDate',d.checkDate); sc('specialMeasure',d.specialMeasure);
   sv('startTime',d.startTime); sv('endTime',d.endTime); sv('breakTime',d.breakTime);
   document.getElementById('useWeekdaySchedule').checked = !!d.useWeekdaySchedule;
+  document.getElementById('nightShiftOnly').checked = !!d.nightShiftOnly;
   {
     const ds = Array.isArray(d.daySchedule) ? d.daySchedule : [];
     for (let i = 0; i < 7; i++) {
